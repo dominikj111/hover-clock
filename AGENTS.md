@@ -20,6 +20,7 @@ The overlay never steals focus, stays above fullscreen apps, and is invisible to
 |------|------|
 | [`proposal.md`](./proposal.md) | Source of truth — full design, architecture, constraints, roadmap |
 | [`roadmap/`](./roadmap/) | Milestone tracking and progress |
+| [`handover/`](./handover/) | Iteration handover logs — what was done, what was learned, what's next |
 
 ## Development Style
 
@@ -47,3 +48,4 @@ These external documents inform HoverClock's development patterns. They live out
 | [`llm_profiles/jigsawflow_guidelines.md`](../llm_profiles/jigsawflow_guidelines.md) | JigsawFlow composition, singleton-registry usage, facade pattern, testing |
 | [`llm_profiles/software_development_style_guides.md`](../llm_profiles/software_development_style_guides.md) | AI contributor behavior, chain-of-thought, simplicity, surgical edits |
 | [`llm_profiles/gtk_frontend_guidelines.md`](../llm_profiles/gtk_frontend_guidelines.md) | GTK widget composition, overlay/view layering, CSS-driven theming |
+| [`llm_profiles/roadmap_iteration_guidelines.md`](../llm_profiles/roadmap_iteration_guidelines.md) | Roadmap → task → handover iteration flow (ICM/MWP); cross-session continuity via handover logs |

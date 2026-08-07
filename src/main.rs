@@ -1,3 +1,6 @@
+mod backend;
+
+use backend::WindowBackend;
 use chrono::Local;
 use gtk::{glib, prelude::*};
 
@@ -21,7 +24,23 @@ fn build_ui(application: &gtk::Application) {
 
     window.set_child(Some(&label));
 
-    window.present();
+    // M1: apply overlay semantics (EWMH hints, non-focusable window type).
+    // Configured at realize time — before the window maps — so the window
+    // manager reads the hints when it manages the window. Degrades to a
+    // logged warning when X11 is unavailable.
+    match backend::X11WindowBackend::new() {
+        Ok(backend) => {
+            window.connect_realize(move |window| backend.configure(window.upcast_ref()));
+        }
+        Err(err) => glib::g_warning!(
+            "hover-clock",
+            "X11 window backend unavailable; overlay behavior disabled: {err}"
+        ),
+    }
+
+    // Show without present(): present() would ask the window manager for
+    // focus, which the overlay must never do (proposal §6).
+    window.set_visible(true);
 
     // we are using a closure to capture the label (else we could also use a normal
     // function)

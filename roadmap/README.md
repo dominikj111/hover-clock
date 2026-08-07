@@ -6,8 +6,8 @@ Derived from [proposal.md](../proposal.md) §14. Each milestone links to its det
 
 | Milestone | Scope | Status |
 |-----------|-------|--------|
-| **M0** | GTK4-rs project scaffold; single clock label; classic window (repo baseline) | Current |
-| **M1** | EWMH hints (`_ABOVE`, `_SKIP_TASKBAR`, `_SKIP_PAGER`); non-focusable window; X11 `WindowBackend` | Pending |
+| **M0** | GTK4-rs project scaffold; single clock label; classic window (repo baseline) | Done |
+| **M1** | EWMH hints (`_ABOVE`, `_SKIP_TASKBAR`, `_SKIP_PAGER`); non-focusable window; X11 `WindowBackend` | Current |
 | **M2** | X11 `ActivationBackend`: hot-corner detection (debounced, edge-triggered) + global `Super + T` + `Esc` dismiss | Pending |
 | **M3** | Full clock widget (time/day/date), CSS styling, show/hide transitions, auto-hide timer | Pending |
 | **M4** | Adopt `singleton-registry`: flat capability registry, facade contracts, TOML config with live hot-swap reload | Pending |
