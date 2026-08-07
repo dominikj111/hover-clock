@@ -41,11 +41,12 @@ The overlay never steals focus, stays above fullscreen apps, and is invisible to
 
 ## Referenced Guidelines
 
-These external documents inform HoverClock's development patterns. They live outside this repo and apply project-agnostically:
+HoverClock's development patterns are informed by the following public methodologies and
+practices (applied project-agnostically):
 
-| Guideline | Applies to |
+| Guideline / methodology | Applies to |
 |-----------|------------|
-| [`llm_profiles/jigsawflow_guidelines.md`](../llm_profiles/jigsawflow_guidelines.md) | JigsawFlow composition, singleton-registry usage, facade pattern, testing |
-| [`llm_profiles/software_development_style_guides.md`](../llm_profiles/software_development_style_guides.md) | AI contributor behavior, chain-of-thought, simplicity, surgical edits |
-| [`llm_profiles/gtk_frontend_guidelines.md`](../llm_profiles/gtk_frontend_guidelines.md) | GTK widget composition, overlay/view layering, CSS-driven theming |
-| [`llm_profiles/icm_mwp_guidelines.md`](../llm_profiles/icm_mwp_guidelines.md) | ICM/MWP methodology: context cascade, intent pipeline, roadmap → task → handover iteration flow, handover log contract |
+| JigsawFlow pattern (via the `singleton-registry` crate) | Composition through a flat capability registry, facade contracts, graceful degradation, testing |
+| Interpretable Context Methodology / Model Workspace Protocol (Van Clief & McDermott, arXiv:2603.16021) | Context cascade, intent-driven pipeline, human-reviewed handoffs between iterations |
+| GTK4 conventions | Widget composition, overlay/view layering, CSS-driven theming |
+| AI contributor practices | Chain-of-thought, simplicity, surgical edits, goal-driven execution |
