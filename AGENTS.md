@@ -48,4 +48,4 @@ These external documents inform HoverClock's development patterns. They live out
 | [`llm_profiles/jigsawflow_guidelines.md`](../llm_profiles/jigsawflow_guidelines.md) | JigsawFlow composition, singleton-registry usage, facade pattern, testing |
 | [`llm_profiles/software_development_style_guides.md`](../llm_profiles/software_development_style_guides.md) | AI contributor behavior, chain-of-thought, simplicity, surgical edits |
 | [`llm_profiles/gtk_frontend_guidelines.md`](../llm_profiles/gtk_frontend_guidelines.md) | GTK widget composition, overlay/view layering, CSS-driven theming |
-| [`llm_profiles/roadmap_iteration_guidelines.md`](../llm_profiles/roadmap_iteration_guidelines.md) | Roadmap → task → handover iteration flow (ICM/MWP); cross-session continuity via handover logs |
+| [`llm_profiles/icm_mwp_guidelines.md`](../llm_profiles/icm_mwp_guidelines.md) | ICM/MWP methodology: context cascade, intent pipeline, roadmap → task → handover iteration flow, handover log contract |
