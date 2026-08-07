@@ -4,12 +4,6 @@
 **Scope:** Lightweight Linux overlay daemon (X11 first, Wayland planned)
 **Version:** 0.2 (draft)
 
-> **Reading policy:** This document is the *design planner / offline spec*. It is **not** read on every task.
-> AGENTS.md is the runtime kernel and the sole source of binding constraints.
-> See §15 *Document Loading Policy* for exactly when this file is consulted.
-
----
-
 ## 1. Purpose
 
 HoverClock is a lightweight Linux overlay daemon that surfaces information — starting with a digital clock — **on demand**, via two activation methods:
@@ -294,31 +288,7 @@ Consumers resolve these via the registry; absence of a backend degrades to a dis
 | **M6 — Wayland** | Layer-shell backend behind `WindowBackend` / `ActivationBackend` contracts. |
 | **Later (private exploration)** | Notifications, toast messaging, template-driven widgets, socket data-plane API, overlay-shell direction. |
 
-## 15. Document Loading Policy
-
-If both files were always read, you'd create implicit duplication of constraints and a non-deterministic system under evolution. Therefore:
-
-| File | Role | Loaded |
-| --- | --- | --- |
-| `AGENTS.md` | Runtime kernel — binding constraints | **Always** |
-| `proposal.md` | Design planner / offline spec | **Selectively** |
-
-**Read proposal.md only when:**
-- structural architecture changes are requested
-- a new subsystem or backend is introduced
-- the UX interaction model is modified
-- feature expansion beyond the existing widget scope is planned
-- system-wide refactoring or migration is required
-
-**Do NOT read proposal.md for:**
-- local code changes
-- UI styling changes
-- bug fixes
-- minor feature adjustments
-
-AGENTS.md remains the sole source of runtime constraints; proposal.md is advisory and may be ignored unless explicitly triggered by the conditions above.
-
-## 16. Open Questions
+## 15. Open Questions
 
 - Hot-corner geometry on multi-monitor setups: all monitors or primary only?
 - Wayland hot-corner detection strategy (pointer constraints / global position APIs).
@@ -330,7 +300,7 @@ AGENTS.md remains the sole source of runtime constraints; proposal.md is advisor
 - Whether `Esc` alone is sufficient vs. `Esc` + left-click dismissal semantics on Wayland.
 - Layer-shell anchor/layer choice (`OVERLAY` vs. `TOP`) for stacking above fullscreen.
 
-## 17. Decision Log
+## 16. Decision Log
 
 | Date | Decision | Rationale |
 | --- | --- | --- |
@@ -340,4 +310,3 @@ AGENTS.md remains the sole source of runtime constraints; proposal.md is advisor
 | Early stage | X11 EWMH hints for overlay semantics | `_ABOVE`, `_SKIP_TASKBAR`, `_SKIP_PAGER`, no focus request. |
 | Early stage | **Adopt JigsawFlow pattern + `singleton-registry`** | Flat capability registry, trait contracts, offline-first, graceful degradation, facade-wrapped dependencies — matches the overlay-daemon shape and keeps it extensible. |
 | Early stage | **Daemon/client command pattern (workmeshd-inspired)** | Single binary, dual mode; Unix socket control plane with `Command` trait registry; proven pattern for controlling a long-lived daemon. |
-| Early stage | proposal.md selectively loaded | Avoids constraint duplication; AGENTS.md stays the runtime kernel. |
