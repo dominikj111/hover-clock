@@ -1,0 +1,98 @@
+# HoverClock — Roadmap
+
+Derived from [docs/proposal.md](../docs/proposal.md) §14. One story in progress at a time; a
+story is done only when confirmed implemented (acceptance met + verification per
+`../AGENTS.md`).
+
+## Current state
+
+The daemon runs on X11 (xfwm4-verified): overlay is hidden until triggered, shows on top-right
+hot-corner dwell (200 ms debounced) or `Super + T`, dismisses on `Esc`, never takes focus, and
+stays invisible to task switchers. **S04 (M3 — Presentation)** is next: full clock widget,
+CSS styling, show/hide transitions, auto-hide.
+
+## Story cards
+
+### S01 — M0 Project scaffold ✅ 2026-08-06
+
+- **Status:** ✅ 2026-08-06
+- **Goal:** Repository baseline: a GTK4-rs clock that builds and runs.
+- **Deliverables:** `Cargo.toml`/`Cargo.lock`, `src/main.rs` clock label, README/proposal/AGENTS.
+- **Acceptance:** `cargo build` green; classic window shows a ticking clock.
+- **Design refs:** §7
+- **Hand-off:** None — repo baseline, no hand-off written.
+
+### S02 — M1 Overlay behavior ✅ 2026-08-07
+
+- **Status:** ✅ 2026-08-07
+- **Goal:** The window behaves as an overlay: above fullscreen apps, invisible to task
+  switchers, never focusable.
+- **Deliverables:** `WindowBackend` facade + `X11WindowBackend` (EWMH hints, ICCCM
+  `input=False`, `set_visible` instead of `present`).
+- **Acceptance:** `_NET_WM_WINDOW_TYPE=NOTIFICATION`, `_NET_WM_STATE=ABOVE|SKIP_TASKBAR|
+  SKIP_PAGER`, focus never the overlay — verified live on xfwm4.
+- **Design refs:** §6, §9, §10
+- **Hand-off:** [02-m1-overlay-behavior.md](handoffs/02-m1-overlay-behavior.md)
+
+### S03 — M2 Activation ✅ 2026-08-10
+
+- **Status:** ✅ 2026-08-10
+- **Goal:** Surface the overlay on demand: hot-corner detection (debounced, edge-triggered),
+  global `Super + T`, `Esc` dismiss.
+- **Deliverables:** `ActivationBackend` facade + `X11ActivationBackend` (XI2 pointer motion,
+  core key grabs, glib fd source), glue in `src/main.rs` (dwell debounce, toggle, dismiss).
+- **Acceptance:** overlay hidden at startup; corner dwell shows, quick pass stays hidden;
+  `Super + T` toggles; `Esc` hides; active window never becomes the overlay.
+- **Design refs:** §5, §10, §13
+- **Hand-off:** [03-m2-activation.md](handoffs/03-m2-activation.md)
+
+### S04 — M3 Presentation 🔄
+
+- **Status:** 🔄 in progress
+- **Goal:** The clock becomes a widget: time/day/date, CSS styling, show/hide transitions,
+  auto-hide timer (mouse leaves overlay/corner, debounced).
+- **Deliverables:** full clock widget (§11 layout), CSS theming, placement at the triggered
+  monitor's top-right, auto-hide wired to `CornerLeft`.
+- **Acceptance:** widget layout + styling visible; auto-hide dismisses after debounce; overlay
+  appears at the triggered monitor's corner; performance targets hold (§13).
+- **Design refs:** §5, §11, §13
+- **Hand-off:** pending
+
+### S05 — M4 Registry & config ⬜
+
+- **Status:** ⬜ backlog
+- **Goal:** Adopt `singleton-registry`: flat capability registry, facade contracts, TOML
+  config with live hot-swap reload.
+- **Deliverables:** registry wiring for `WindowBackend`/`ActivationBackend`/`TimeSource`/
+  `Config`; TOML config; reload without resetting overlay state; shortcut-only fallback on
+  misconfiguration.
+- **Acceptance:** components resolve via the registry; config hot-swap verified; degraded
+  activation still works.
+- **Design refs:** §10, §12
+- **Hand-off:** pending
+
+### S06 — M5 IPC (daemon/client) ⬜
+
+- **Status:** ⬜ backlog
+- **Goal:** Dual-mode binary with a Unix socket control plane and a client module.
+- **Deliverables:** socket listener, `Command` registry, client with retries; commands `ping`,
+  `show`, `hide`, `toggle`, `status`, `version`, `commands`, `stop`.
+- **Acceptance:** client drives overlay state over the socket; overlay stays functional without
+  IPC (degradation, §12).
+- **Design refs:** §7, §12, §15 (socket path/ownership, framing)
+- **Hand-off:** pending
+
+### S07 — M6 Wayland ⬜
+
+- **Status:** ⬜ backlog
+- **Goal:** Wayland layer-shell backend behind the existing `WindowBackend` /
+  `ActivationBackend` contracts.
+- **Deliverables:** layer-shell `WindowBackend`; pointer/shortcut `ActivationBackend`.
+- **Acceptance:** same behavior contract on a Wayland compositor; X11 path unchanged.
+- **Design refs:** §10, §15 (layer-shell anchor/layer choice)
+- **Hand-off:** pending
+
+## Later (private exploration)
+
+Notifications, toast messaging, template-driven widgets, socket data-plane API, overlay-shell
+direction. Out of scope for this public repository.

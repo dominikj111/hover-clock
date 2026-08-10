@@ -1,32 +1,25 @@
-# Handover — M1 Overlay Behavior (2026-08-07)
+# Hand-off — S02 M1 Overlay Behavior
 
-Follows the ICM/MWP handover contract (human-reviewed handoff between iterations; see
-AGENTS.md). Roadmap status: **M0 → Done, M1 → Current (completed this iteration)**.
+- **Story status:** ✅ 2026-08-07 (confirmed done)
+- **Next story:** S03 M2 Activation
 
-## Task
+## Delivered
 
-**M1 — Overlay behavior**: EWMH hints (`_ABOVE`, `_SKIP_TASKBAR`, `_SKIP_PAGER`), non-focusable
-window, X11 `WindowBackend` (roadmap/README.md). Done = verified live on the X11 session:
-window above fullscreen apps, invisible to task switchers, never steals focus.
-
-## What was done
-
-- `src/backend/mod.rs` — `WindowBackend` trait (first system facade, proposal §10).
+- `src/backend/mod.rs` — `WindowBackend` facade contract (proposal §10).
 - `src/backend/x11.rs` — `X11WindowBackend`: dedicated x11rb connection applying
   `_NET_WM_WINDOW_TYPE_NOTIFICATION`, `_NET_WM_STATE` (ABOVE/SKIP_TASKBAR/SKIP_PAGER), ICCCM
   `WM_HINTS input=False`.
-- `src/main.rs` — backend configured at **realize time** (pre-map, so the WM reads hints at
+- `src/main.rs` — backend configured at realize time (pre-map, so the WM reads hints at
   manage); window shown via `set_visible(true)` instead of `present()`.
 - `Cargo.toml` — added `gdk4-x11` (X11 surface XID), `x11rb` (pure-Rust X11 connection).
-- `roadmap/README.md` — status table updated.
 
-## What was done differently (and why)
+## Decisions & deviations
 
 1. **`present()` replaced by `set_visible(true)`** — *not* in the M1 plan. GTK4's `present()`
    unconditionally calls `gdk_toplevel_focus` → sends `_NET_ACTIVE_WINDOW` → the WM focuses the
    window (verified in xfwm4 source: `clientActivate` honors it when `click_to_focus` is set).
    This single change made the overlay stop stealing focus. Keep it: never call `present()` for
-   the overlay.
+   the overlay (§6 deviation, absorbed into AGENTS.md rules).
 2. **`WM_HINTS` must be re-applied post-map.** GTK rewrites `WM_HINTS` when it shows the surface
    (`gdk_x11_surface_show` → `set_initial_hints`), clobbering any pre-map write. The backend now
    re-writes `input=False` on every map + one 300 ms retry; xfwm4 re-reads `WM_HINTS` on
@@ -44,33 +37,22 @@ window above fullscreen apps, invisible to task switchers, never steals focus.
    manage race. If M3 (show/hide) needs a reliable post-manage hook, select PropertyChange on the
    window and watch for the WM's `_NET_WM_STATE` write instead of adding more timers.
 
-## Verification
-
-- `cargo build`, `cargo clippy`, `cargo test` — clean, no warnings.
-- Live on xfwm4 4.20 (DISPLAY=:0.0), 3 consecutive launches, all stable:
-  - `_NET_WM_WINDOW_TYPE` = `_NET_WM_WINDOW_TYPE_NOTIFICATION`
-  - `_NET_WM_STATE` = `SKIP_PAGER, SKIP_TASKBAR, ABOVE`
-  - `WM_HINTS`: "Client accepts input or input focus: False"
-  - Active/focused window never the overlay (at launch and after other windows take focus).
-- Engineered against xfwm4 4.20.0 and GTK 4.18.6 sources (fetched to /tmp during this session,
-  not committed).
-
-## Open questions
+## Known issues / follow-ups
 
 - **Stacking above fullscreen** was verified only from source (xfwm4 puts NOTIFICATION windows in
   `WIN_LAYER_NOTIFICATION`, above fullscreen). No fullscreen app was running to confirm live.
 - **Alt-tab / taskbar invisibility** follows from the EWMH contract; not exercised live (no
   interactive session during testing).
-- M1 did **not** adopt `singleton-registry` (that is M4 by roadmap) — `WindowBackend` is a plain
-  trait used directly; the registry will register it later.
-- `application_id` still says `com.github.gtk-rs.examples.clock` (M0 leftover) — out of M1 scope,
-  revisit when the binary gets its real identity.
+- M1 did **not** adopt `singleton-registry` (that is S05/M4 by roadmap) — `WindowBackend` is a
+  plain trait used directly; the registry will register it later.
+- `application_id` still says `com.github.gtk-rs.examples.clock` (S01 leftover) — revisit when
+  the binary gets its real identity (S06/M5).
 
-## Next step
+## Hand-off to S03
 
-Start **M2 — Activation**: `ActivationBackend` contract (hot-corner detection debounced and
+Start **S03 — M2 Activation**: `ActivationBackend` contract (hot-corner detection debounced and
 edge-triggered, global `Super + T`, `Esc` dismiss). Consult proposal §5/§10/§15 first — open
 questions (hot-corner geometry on multi-monitor, debounce values, overlay placement) are
-unanswered. Note: Esc handling on X11 will need a keyboard grab or pass-through key handling;
-the overlay must never take focus, so `Esc` cannot rely on window focus (M1's `input=False`
-guarantees that).
+unanswered (per the workspace uncertainty rule, default them to common practice). Note: Esc
+handling on X11 needs a keyboard grab or pass-through key handling; the overlay must never take
+focus, so `Esc` cannot rely on window focus (this story's `input=False` guarantees that).

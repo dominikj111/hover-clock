@@ -1,53 +1,51 @@
 # AGENTS.md — HoverClock
 
-Repository guide for contributors and AI agents. The source of truth for design, architecture,
-constraints, and roadmap is **[proposal.md](./proposal.md)** — always consult it for decisions.
+## Purpose
 
-## Project at a Glance
+HoverClock is a transient Linux overlay daemon (X11 first, Wayland planned): widgets —
+starting with a clock — surface on demand via hot-corner or global shortcut, above fullscreen
+apps, invisible to task switchers, never taking focus. Rust + GTK4-rs, single binary,
+dual-mode (daemon + client), offline-first. Success: proposal §14 milestones confirmed
+implemented in order, one at a time.
 
-HoverClock is a transient overlay daemon for Linux (X11 first, Wayland planned).
-It surfaces widgets — starting with a clock — via hot-corner or global shortcut.
-The overlay never steals focus, stays above fullscreen apps, and is invisible to task switchers.
+## Navigation
 
-- **Stack:** Rust, GTK4-rs, `singleton-registry` (JigsawFlow composition)
-- **Daemon + client:** single binary, dual-mode; Unix socket control plane
-- **Widget-extensible:** clock is the first widget, not the final product
-- **Offline-first:** no network dependency; system clock only
-
-## Key Documents
-
-| File | Role |
+| Need | Read |
 |------|------|
-| [`proposal.md`](./proposal.md) | Source of truth — full design, architecture, constraints, roadmap |
-| [`roadmap/`](./roadmap/) | Milestone tracking and progress |
-| [`handover/`](./handover/) | Iteration handover logs — what was done, what was learned, what's next |
+| Understand the system / intended behavior | `docs/proposal.md` — always read the § cited on the story card before starting |
+| Check current status / what's next | `roadmap/ROADMAP.md` — current story + hand-offs |
+| Change the design | `docs/proposal.md`, amending `docs/index.md` in the same change |
+| Change window / activation backends | `src/backend/` — facade contracts in `src/backend/mod.rs` |
+| Add a widget | proposal §11 (widget contract); composition in `src/main.rs` |
+| Hand-off contract / iteration loop | ICM/MWP guideline (§5 accept → process → handoff) |
 
-## Development Style
+## Rules
 
-- **Surgical changes only.** Touch only what the task requires. No full-file rewrites, no "improving" adjacent code, no refactoring things that aren't broken.
-- **No speculative features.** Minimum code that solves the problem. No abstractions for single-use code, no "flexibility" that wasn't requested.
-- **Match existing style** even if you'd do it differently. Every changed line should trace directly to the task.
-- **Verify with `cargo build` / `cargo test`** after changes; keep the crate warning-free.
-- **Unknowns default to common practice.** When a decision point is unanswered (open questions, unset defaults, unspecified parameters), be agnostic and generic: pick the most common, idiomatic approach and proceed. Do not raise questions whose answer is a matter of taste (timings, sizes, placement); only decisions that change architecture or public contracts get raised.
+- `docs/proposal.md` is authoritative when implementation conflicts with the current design.
+- The overlay is transient — never a persistent desktop component; the clock is a feature, not
+  the system (architecture stays widget-extensible).
+- No direct coupling between input detection and rendering; system APIs live behind trait
+  facades (JigsawFlow facade contract) and degrade to logged warnings, never crashes.
+- The daemon is a single binary, dual-mode process; client mode lands with M5.
+- Escape always dismisses the overlay if visible — it never has focus, so dismissal cannot
+  rely on window focus.
+- Never call `present()` on the overlay (it requests focus); show/hide via `set_visible()`.
 
-## Generic Tautologies
+## Workflow
 
-- The overlay is transient; never a persistent desktop component.
-- The clock is a feature, not the system — architecture stays widget-extensible.
-- The daemon is a single binary, dual-mode process.
-- No direct coupling between input detection and rendering.
-- System backends are abstracted behind trait facades; business logic never touches system APIs directly.
-- Components resolve dependencies through the singleton registry, never through direct references.
-- Escape always dismisses the overlay if visible.
+Read the current story card + its hand-off → the proposal §N cited on the card → trace the
+existing code before writing → smallest coherent change → validate (below) → mark the story
+done and write the hand-off.
 
-## Referenced Guidelines
+## Validation
 
-HoverClock's development patterns are informed by the following public methodologies and
-practices (applied project-agnostically):
+- `cargo build` + `cargo clippy` clean (zero warnings); `cargo test` green.
+- Live smoke on the X session (xfwm4): corner dwell shows, `Esc` hides, `Super + T` toggles,
+  the active window never becomes the overlay.
 
-| Guideline / methodology | Applies to |
-|-----------|------------|
-| JigsawFlow pattern (via the `singleton-registry` crate) | Composition through a flat capability registry, facade contracts, graceful degradation, testing |
-| Interpretable Context Methodology / Model Workspace Protocol (Van Clief & McDermott, arXiv:2603.16021) | Context cascade, intent-driven pipeline, human-reviewed handoffs between iterations |
-| GTK4 conventions | Widget composition, overlay/view layering, CSS-driven theming |
-| AI contributor practices | Chain-of-thought, simplicity, surgical edits, goal-driven execution |
+## Context
+
+Instantiated from the workspace profile by topic name: ICM/MWP guideline (iteration loop),
+JigsawFlow guideline (registry facades, degradation), GTK frontend guideline (widget
+composition), Rust development guideline (idioms, minimal deps), Project structure guideline
+(this file's shape). Do not duplicate the profile's conventions here.
