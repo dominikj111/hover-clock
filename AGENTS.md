@@ -28,6 +28,7 @@ The overlay never steals focus, stays above fullscreen apps, and is invisible to
 - **No speculative features.** Minimum code that solves the problem. No abstractions for single-use code, no "flexibility" that wasn't requested.
 - **Match existing style** even if you'd do it differently. Every changed line should trace directly to the task.
 - **Verify with `cargo build` / `cargo test`** after changes; keep the crate warning-free.
+- **Unknowns default to common practice.** When a decision point is unanswered (open questions, unset defaults, unspecified parameters), be agnostic and generic: pick the most common, idiomatic approach and proceed. Do not raise questions whose answer is a matter of taste (timings, sizes, placement); only decisions that change architecture or public contracts get raised.
 
 ## Generic Tautologies
 

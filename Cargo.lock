@@ -489,6 +489,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "gdk4-x11",
+ "gio",
  "gtk4",
  "x11rb",
 ]
