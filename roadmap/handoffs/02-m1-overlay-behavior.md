@@ -43,6 +43,15 @@
   `WIN_LAYER_NOTIFICATION`, above fullscreen). No fullscreen app was running to confirm live.
 - **Alt-tab / taskbar invisibility** follows from the EWMH contract; not exercised live (no
   interactive session during testing).
+- **Follow-up (taskbar flash fixed):** live use showed the overlay's icon briefly in the tasklist
+  on every show. Root cause: GDK's show path (`set_initial_hints` in `gdksurface-x11.c`) rebuilds
+  `_NET_WM_STATE` from GDK's own toplevel state and *deletes* the property when that state is
+  empty — a direct pre-map write never reaches the WM's manage read; the tasklist (libwnck)
+  only excludes `_NET_WM_STATE_SKIP_TASKBAR`, not the NOTIFICATION type. Fix: set GDK's X11
+  skip hints (`gdk_x11_surface_set_skip_taskbar_hint`/`_skip_pager_hint`, exported, deprecated
+  since 4.18) at realize, so GDK writes the atoms on its own connection before the map request.
+  Verified: state present at MapNotify, no tasklist entry across 8 show/hide cycles, `Esc`/
+  `Super + T`/corner unaffected.
 - M1 did **not** adopt `singleton-registry` (that is S05/M4 by roadmap) — `WindowBackend` is a
   plain trait used directly; the registry will register it later.
 - `application_id` still says `com.github.gtk-rs.examples.clock` (S01 leftover) — revisit when

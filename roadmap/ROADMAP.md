@@ -7,7 +7,8 @@ story is done only when confirmed implemented (acceptance met + verification per
 ## Current state
 
 The daemon runs on X11 (xfwm4-verified): overlay is hidden until triggered, shows on top-right
-hot-corner dwell (200 ms debounced) or `Super + T`, dismisses on `Esc`, never takes focus, and
+hot-corner dwell (200 ms debounced) or `Super + T`, dismisses on `Esc`, never takes focus, never
+flashes in the taskbar (GDK skip-taskbar hints, fix on M1/M2), and
 stays invisible to task switchers. **S04 (M3 — Presentation)** is next: full clock widget,
 CSS styling, show/hide transitions, auto-hide.
 

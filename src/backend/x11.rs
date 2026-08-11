@@ -8,6 +8,18 @@
 //! via the EWMH client message). Any failure degrades to a logged warning
 //! — overlay hints are best-effort, never fatal.
 //!
+//! **Taskbar flash (fixed):** GDK's show path (`set_initial_hints` in
+//! `gdksurface-x11.c`) rebuilds `_NET_WM_STATE` from GDK's own toplevel
+//! state immediately before mapping, and *deletes* the property when that
+//! state is empty. A direct pre-map write therefore never reaches the WM's
+//! manage read, so a tasklist (libwnck reads `_NET_WM_STATE_SKIP_TASKBAR`
+//! at window-add; the NOTIFICATION type is *not* an exclusion) briefly
+//! shows the overlay until the post-map EWMH state lands. Setting GDK's
+//! X11 skip hints (`gdk_x11_surface_set_skip_*_hint`) makes
+//! `set_initial_hints` write `_NET_WM_STATE_SKIP_TASKBAR`/`_SKIP_PAGER` on
+//! GDK's own connection, in order, before the map request — the state is
+//! present at MapNotify and the taskbar never lists the overlay.
+//!
 //! [`X11ActivationBackend`]: input activation (hot-corner, global
 //! shortcuts). Pointer motion and key presses are watched on the root
 //! window (event-driven, no polling); the hot corner is edge-triggered
@@ -20,6 +32,7 @@ use std::os::fd::AsRawFd;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use gtk::gdk;
 use gtk::glib;
 use gtk::prelude::*;
 use x11rb::connection::Connection;
@@ -35,6 +48,25 @@ use x11rb::rust_connection::RustConnection;
 use x11rb::wrapper::ConnectionExt;
 
 use super::{ActivationBackend, ActivationEvent, Monitor, WindowBackend};
+
+// GDK's X11 skip-hint setters (public header `gdkx11surface.h`, exported
+// from `libgtk-4`; deprecated since 4.18 but present in 4.18/4.20).
+//
+// These are the *only* way to make GDK itself write `_NET_WM_STATE`
+// instead of deleting it in its show path (see module docs — the taskbar
+// flash). The flag lives on the toplevel; `set_initial_hints` reads it on
+// every show, so one call at realize covers all show/hide cycles.
+#[link(name = "gtk-4")]
+unsafe extern "C" {
+    fn gdk_x11_surface_set_skip_taskbar_hint(
+        surface: *mut gdk::ffi::GdkSurface,
+        skips_taskbar: glib::ffi::gboolean,
+    );
+    fn gdk_x11_surface_set_skip_pager_hint(
+        surface: *mut gdk::ffi::GdkSurface,
+        skips_pager: glib::ffi::gboolean,
+    );
+}
 
 /// X11 implementation of [`WindowBackend`].
 pub struct X11WindowBackend {
@@ -72,6 +104,19 @@ impl WindowBackend for X11WindowBackend {
         };
 
         let xid = x11_surface.xid() as u32;
+
+        // Tell GDK the overlay skips the taskbar/pager so its show path
+        // writes `_NET_WM_STATE` (on GDK's own connection, before the map
+        // request) instead of deleting it. Without this, the tasklist
+        // briefly shows the overlay on every show until the post-map EWMH
+        // state lands — the flash. Deprecated in GTK 4.18 but present; if
+        // a future GTK removes the symbols the build fails loudly here.
+        unsafe {
+            let surface = x11_surface.as_ptr() as *mut gdk::ffi::GdkSurface;
+            gdk_x11_surface_set_skip_taskbar_hint(surface, 1);
+            gdk_x11_surface_set_skip_pager_hint(surface, 1);
+        }
+
         let atoms = match self.intern_atoms() {
             Ok(atoms) => atoms,
             Err(err) => {
