@@ -2,8 +2,9 @@
  *
  * Theming note: selectors are class-based so a future theme (S05, config)
  * is another stylesheet selected wholesale — no code change. The overlay
- * window node is transparent; the rounded, translucent-black box is the
- * `.clock-widget` child, so GTK's own box rendering clips the corners.
+ * window node is transparent; a `.clock-shell` (1px white border, 2px
+ * transparent gap) wraps the rounded, translucent-black `.clock-widget`
+ * box, so GTK's own box rendering clips the corners.
  */
 
 window,
@@ -11,9 +12,22 @@ window.background {
     background-color: transparent;
 }
 
+/* 1px white border around the overlay; the 2px padding is the transparent
+ * gap between border and black box (shell has no background, so the
+ * desktop shows through). */
+.clock-shell {
+    border-width: 1px;
+    border-style: solid;
+    border-color: #ffffff;
+    border-radius: 12px;
+    padding: 2px;
+    background-color: transparent;
+}
+
 .clock-widget {
     background-color: rgba(0, 0, 0, 0.8);
-    border-radius: 12px;
+    /* Concentric with the 12px shell radius minus border + gap (1+2). */
+    border-radius: 9px;
     padding: 14px 24px;
 }
 
