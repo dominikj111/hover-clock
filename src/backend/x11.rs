@@ -23,9 +23,11 @@
 //! [`X11ActivationBackend`]: input activation (hot-corner, global
 //! shortcuts). Pointer motion and key presses are watched on the root
 //! window (event-driven, no polling); the hot corner is edge-triggered
-//! per monitor. `Super + T` is grabbed for the daemon's lifetime, `Esc`
-//! only while the overlay is visible (the overlay never has focus, so
-//! dismissal cannot rely on window focus).
+//! per monitor. Workspace switches are detected via the EWMH
+//! `_NET_CURRENT_DESKTOP` root property, so the overlay hides when the
+//! user leaves the workspace. `Super + T` is grabbed for the daemon's
+//! lifetime, `Esc` only while the overlay is visible (the overlay never
+//! has focus, so dismissal cannot rely on window focus).
 
 use std::cell::RefCell;
 use std::os::fd::AsRawFd;
@@ -40,8 +42,9 @@ use x11rb::errors::{ConnectError, ReplyError};
 use x11rb::protocol::randr::ConnectionExt as RandrConnectionExt;
 use x11rb::protocol::xinput::{self, ConnectionExt as XinputConnectionExt, XIEventMask};
 use x11rb::protocol::xproto::{
-    Atom, AtomEnum, ClientMessageData, ClientMessageEvent, ConnectionExt as XProtoConnectionExt,
-    EventMask, GrabMode, KeyButMask, Keycode, ModMask, PropMode,
+    Atom, AtomEnum, ChangeWindowAttributesAux, ClientMessageData, ClientMessageEvent,
+    ConnectionExt as XProtoConnectionExt, EventMask, GrabMode, KeyButMask, Keycode, ModMask,
+    PropMode,
 };
 use x11rb::protocol::Event;
 use x11rb::rust_connection::RustConnection;
@@ -310,6 +313,11 @@ struct ActivationState {
     esc_keycode: Option<Keycode>,
     in_corner: Option<Monitor>,
     overlay_visible: bool,
+    /// Last observed EWMH `_NET_CURRENT_DESKTOP` value; `None` while the
+    /// WM does not advertise the property.
+    last_desktop: Option<u32>,
+    /// Interned `_NET_CURRENT_DESKTOP` atom, for property filtering.
+    desktop_atom: Atom,
 }
 
 impl X11ActivationBackend {
@@ -340,10 +348,11 @@ impl X11ActivationBackend {
             .map_err(|err| format!("gio socket for X11 connection failed: {err}"))?;
 
         let conn = Arc::clone(&self.conn);
+        let root = self.root;
         let state = Rc::clone(&self.state);
         let source =
             gio::prelude::SocketExtManual::create_source(&socket, glib::IOCondition::IN, None::<&gio::Cancellable>, Some("hover-clock-x11-activation"), glib::Priority::DEFAULT, move |_, _| {
-                for event in poll_events(&conn, &state) {
+                for event in poll_events(&conn, root, &state) {
                     dispatch(event);
                 }
                 glib::ControlFlow::Continue
@@ -380,6 +389,39 @@ impl ActivationBackend for X11ActivationBackend {
         let monitors = query_monitors(&self.conn, self.root)?;
         let (toggle_keycode, esc_keycode) = lookup_keycodes(&self.conn)?;
 
+        // Workspace tracking: watch the EWMH `_NET_CURRENT_DESKTOP` root
+        // property. The overlay window stays on the workspace it was
+        // mapped on; when the user switches away, the consumer hides it,
+        // so the overlay never lingers on a workspace the user has left
+        // and the next trigger shows it on the current one. Degrades to a
+        // warning when the WM does not advertise the property.
+        let desktop_atom = self
+            .conn
+            .intern_atom(false, b"_NET_CURRENT_DESKTOP")
+            .map_err(|err| err.to_string())?
+            .reply()
+            .map_err(|err| err.to_string())?
+            .atom;
+        let current_desktop = read_current_desktop(&self.conn, self.root, desktop_atom);
+        if current_desktop.is_none() {
+            glib::g_warning!(
+                "hover-clock",
+                "X11 activation: WM does not advertise _NET_CURRENT_DESKTOP; \
+                 workspace-change hiding disabled"
+            );
+        }
+        self.conn
+            .change_window_attributes(
+                self.root,
+                &ChangeWindowAttributesAux {
+                    event_mask: Some(EventMask::PROPERTY_CHANGE),
+                    ..Default::default()
+                },
+            )
+            .map_err(|err| err.to_string())?
+            .check()
+            .map_err(|err| err.to_string())?;
+
         // Global shortcut: grab `Super + T` for the daemon's lifetime.
         // Grab the four lock-state combinations so NumLock/CapsLock do not
         // silently disable the shortcut (standard grabber practice).
@@ -413,6 +455,8 @@ impl ActivationBackend for X11ActivationBackend {
             monitors,
             toggle_keycode,
             esc_keycode,
+            last_desktop: current_desktop,
+            desktop_atom,
             ..ActivationState::default()
         };
 
@@ -454,12 +498,13 @@ impl ActivationBackend for X11ActivationBackend {
 /// Drain pending X events into activation events (non-blocking).
 fn poll_events(
     conn: &RustConnection,
+    root: u32,
     state: &Rc<RefCell<ActivationState>>,
 ) -> Vec<ActivationEvent> {
     let mut out = Vec::new();
     loop {
         match conn.poll_for_event() {
-            Ok(Some(event)) => handle_event(state, &event, &mut out),
+            Ok(Some(event)) => handle_event(conn, root, state, &event, &mut out),
             Ok(None) => break,
             Err(err) => {
                 glib::g_warning!("hover-clock", "X11 activation: connection error: {err}");
@@ -470,7 +515,13 @@ fn poll_events(
     out
 }
 
-fn handle_event(state: &Rc<RefCell<ActivationState>>, event: &Event, out: &mut Vec<ActivationEvent>) {
+fn handle_event(
+    conn: &RustConnection,
+    root: u32,
+    state: &Rc<RefCell<ActivationState>>,
+    event: &Event,
+    out: &mut Vec<ActivationEvent>,
+) {
     match event {
         // XI2 motion: root coordinates are 16.16 fixed-point.
         Event::XinputMotion(event) => {
@@ -504,8 +555,38 @@ fn handle_event(state: &Rc<RefCell<ActivationState>>, event: &Event, out: &mut V
                 out.push(ActivationEvent::Dismiss);
             }
         }
+        // EWMH workspace switch: the WM updates `_NET_CURRENT_DESKTOP`
+        // on the root whenever the active workspace changes.
+        Event::PropertyNotify(event) => {
+            let mut state = state.borrow_mut();
+            if event.atom != state.desktop_atom {
+                return;
+            }
+            // Re-read the value — the WM may have just created the
+            // property or updated it. Emit only on an actual change, so
+            // repeated notifications do not spam hide/show.
+            match read_current_desktop(conn, root, state.desktop_atom) {
+                Some(desktop) if Some(desktop) != state.last_desktop => {
+                    state.last_desktop = Some(desktop);
+                    out.push(ActivationEvent::WorkspaceChanged);
+                }
+                _ => {}
+            }
+        }
         _ => {}
     }
+}
+
+/// Read the current workspace from the EWMH `_NET_CURRENT_DESKTOP`
+/// property (CARDINAL 32 on the root); `None` when the WM does not
+/// advertise it.
+fn read_current_desktop(conn: &RustConnection, root: u32, atom: Atom) -> Option<u32> {
+    conn.get_property(false, root, atom, AtomEnum::CARDINAL, 0, 1)
+        .ok()?
+        .reply()
+        .ok()?
+        .value32()?
+        .next()
 }
 
 /// True when `(x, y)` lies inside the top-right corner region of `monitor`.

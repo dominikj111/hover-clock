@@ -225,6 +225,19 @@ fn build_ui(application: &gtk::Application) {
                     }
                     hide_overlay(&glue_window, &glue_backend);
                 }
+                ActivationEvent::WorkspaceChanged => {
+                    // The overlay window stays on the workspace it was
+                    // mapped on; hide it so it does not linger on the
+                    // workspace the user left, and the next trigger shows
+                    // it on the current one (one press, not two).
+                    if let Some(id) = dwell.borrow_mut().take() {
+                        id.remove();
+                    }
+                    if let Some(id) = hide_timer.borrow_mut().take() {
+                        id.remove();
+                    }
+                    hide_overlay(&glue_window, &glue_backend);
+                }
             };
 
             if let Err(err) = backend.install_event_source(Box::new(dispatch)) {

@@ -32,6 +32,13 @@ pub enum ActivationEvent {
     Toggle,
     /// Dismissal key pressed (`Esc`).
     Dismiss,
+    /// The active workspace changed (EWMH `_NET_CURRENT_DESKTOP`).
+    ///
+    /// The overlay window stays on the workspace it was mapped on; the
+    /// consumer hides the overlay so it never lingers on a workspace the
+    /// user has left, keeping the show/hide state consistent (one press
+    /// then reveals it on the current workspace).
+    WorkspaceChanged,
 }
 
 /// Contract for platform-specific input activation (proposal §10).
