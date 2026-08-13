@@ -11,6 +11,12 @@ use gtk::{glib, prelude::*};
 /// shows (proposal §5: debounced; common value ~200 ms).
 const CORNER_DWELL: std::time::Duration = std::time::Duration::from_millis(200);
 
+/// Leave the hot corner this long before a visible overlay auto-hides
+/// (proposal §5: auto-hide is debounced, not instant, to avoid flicker
+/// when the pointer oscillates across the corner boundary). Slightly
+/// longer than `CORNER_DWELL` so a re-entry cancels the hide in time.
+const AUTO_HIDE_DELAY: std::time::Duration = std::time::Duration::from_millis(250);
+
 fn main() -> glib::ExitCode {
     let application = gtk::Application::builder()
         .application_id("com.github.gtk-rs.examples.clock")
@@ -75,13 +81,19 @@ fn build_ui(application: &gtk::Application) {
             let glue_window = Rc::clone(&window);
             let glue_backend = Rc::clone(backend);
             let dwell = Rc::new(RefCell::new(None::<glib::SourceId>));
+            let hide_timer = Rc::new(RefCell::new(None::<glib::SourceId>));
 
             // Runs on the main context for every activation event.
             let dispatch = move |event: ActivationEvent| match event {
                 ActivationEvent::CornerEntered { .. } => {
-                    // Debounce: show only after the pointer dwells in the
-                    // corner. Per-monitor placement is M3 (presentation).
+                    // Back in the corner: cancel any pending auto-hide and
+                    // (re)start the dwell debounce. Showing again is a
+                    // no-op when the overlay is already visible. Per-monitor
+                    // placement is M3 (presentation).
                     if let Some(id) = dwell.borrow_mut().take() {
+                        id.remove();
+                    }
+                    if let Some(id) = hide_timer.borrow_mut().take() {
                         id.remove();
                     }
                     let window = Rc::clone(&glue_window);
@@ -95,13 +107,29 @@ fn build_ui(application: &gtk::Application) {
                     *dwell.borrow_mut() = Some(id);
                 }
                 ActivationEvent::CornerLeft { .. } => {
-                    // Auto-hide on pointer leave is M3; dismissal is Esc.
+                    // Auto-hide: leaving the corner while the overlay is
+                    // visible starts a debounced hide (proposal §5), not an
+                    // instant dismissal — re-entering in time cancels it.
                     if let Some(id) = dwell.borrow_mut().take() {
                         id.remove();
+                    }
+                    if glue_window.is_visible() {
+                        let window = Rc::clone(&glue_window);
+                        let backend = Rc::clone(&glue_backend);
+                        let hide_timer_cell = Rc::clone(&hide_timer);
+                        let id = glib::timeout_add_local(AUTO_HIDE_DELAY, move || {
+                            hide_overlay(&window, &backend);
+                            *hide_timer_cell.borrow_mut() = None;
+                            glib::ControlFlow::Break
+                        });
+                        *hide_timer.borrow_mut() = Some(id);
                     }
                 }
                 ActivationEvent::Toggle => {
                     if let Some(id) = dwell.borrow_mut().take() {
+                        id.remove();
+                    }
+                    if let Some(id) = hide_timer.borrow_mut().take() {
                         id.remove();
                     }
                     if glue_window.is_visible() {
@@ -112,6 +140,9 @@ fn build_ui(application: &gtk::Application) {
                 }
                 ActivationEvent::Dismiss => {
                     if let Some(id) = dwell.borrow_mut().take() {
+                        id.remove();
+                    }
+                    if let Some(id) = hide_timer.borrow_mut().take() {
                         id.remove();
                     }
                     hide_overlay(&glue_window, &glue_backend);
