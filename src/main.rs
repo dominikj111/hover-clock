@@ -17,6 +17,66 @@ const CORNER_DWELL: std::time::Duration = std::time::Duration::from_millis(200);
 /// longer than `CORNER_DWELL` so a re-entry cancels the hide in time.
 const AUTO_HIDE_DELAY: std::time::Duration = std::time::Duration::from_millis(250);
 
+/// M3 — the clock widget (proposal §11): time, day, date labels in a
+/// vertical stack, styled by the bundled stylesheet. Pure UI with no
+/// system side effects; this struct is the widget boundary a future
+/// widget registry / `WidgetProvider` (proposal §11) would swap out.
+struct ClockWidget {
+    time: gtk::Label,
+    day: gtk::Label,
+    date: gtk::Label,
+}
+
+impl ClockWidget {
+    /// Build the `.clock-widget` box (rounded, translucent black per
+    /// style.css) holding the three labels, and fill them once.
+    fn new() -> (gtk::Box, Self) {
+        let time = gtk::Label::new(None);
+        time.add_css_class("clock-time");
+        let day = gtk::Label::new(None);
+        day.add_css_class("clock-day");
+        let date = gtk::Label::new(None);
+        date.add_css_class("clock-date");
+
+        for label in [&time, &day, &date] {
+            label.set_halign(gtk::Align::Center);
+        }
+
+        let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        root.add_css_class("clock-widget");
+        root.append(&time);
+        root.append(&day);
+        root.append(&date);
+
+        let widget = Self { time, day, date };
+        widget.update();
+        (root, widget)
+    }
+
+    /// Refresh all labels from the current wall-clock time.
+    fn update(&self) {
+        let now = Local::now();
+        self.time
+            .set_text(&now.format("%H:%M:%S").to_string());
+        self.day.set_text(&now.format("%A").to_string());
+        self.date.set_text(&now.format("%-d %B %Y").to_string());
+    }
+}
+
+/// Install the bundled stylesheet at APPLICATION priority so it overrides
+/// the theme for this app only, never for other GTK programs.
+fn load_css() {
+    let provider = gtk::CssProvider::new();
+    provider.load_from_string(include_str!("style.css"));
+    if let Some(display) = gtk::gdk::Display::default() {
+        gtk::style_context_add_provider_for_display(
+            &display,
+            &provider,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+    }
+}
+
 fn main() -> glib::ExitCode {
     let application = gtk::Application::builder()
         .application_id("com.github.gtk-rs.examples.clock")
@@ -29,13 +89,21 @@ fn build_ui(application: &gtk::Application) {
     let window = gtk::ApplicationWindow::new(application);
 
     window.set_title(Some("Clock Example"));
-    window.set_default_size(260, 40);
 
-    let time = current_time();
-    let label = gtk::Label::default();
-    label.set_text(&time);
+    // M3: the overlay has no system frame. The NOTIFICATION window type
+    // (M1) already suppresses it under xfwm4; `decorated(false)` makes
+    // that independent of the window manager. A GTK window property, not
+    // a system API — it stays in the UI layer (proposal §9).
+    window.set_decorated(false);
 
-    window.set_child(Some(&label));
+    // M3: static single style — the bundled stylesheet (rounded corners,
+    // translucent black, proposal §8.3). Future theming (S05 config)
+    // selects between bundled stylesheets; style.css is the swap point.
+    load_css();
+
+    // M3: the clock widget (proposal §11) replaces the M0 single label.
+    let (clock_root, clock) = ClockWidget::new();
+    window.set_child(Some(&clock_root));
 
     // M1: apply overlay semantics (EWMH hints, non-focusable window type).
     // Configured at realize time — before the window maps — so the window
@@ -160,16 +228,14 @@ fn build_ui(application: &gtk::Application) {
         None => window.set_visible(true),
     }
 
-    // we are using a closure to capture the label (else we could also use a normal
-    // function)
+    // One update per second refreshes all three labels (day/date roll over
+    // at midnight). The widget holds no timers of its own; a single
+    // low-frequency source is the only work (proposal §13: no per-frame
+    // allocations, no polling loops).
     let tick = move || {
-        let time = current_time();
-        label.set_text(&time);
-        // we could return glib::ControlFlow::Break to stop our clock after this tick
+        clock.update();
         glib::ControlFlow::Continue
     };
-
-    // executes the closure once every second
     glib::timeout_add_seconds_local(1, tick);
 }
 
@@ -185,6 +251,4 @@ fn hide_overlay(window: &gtk::ApplicationWindow, backend: &Rc<backend::X11Activa
     backend.set_overlay_visible(false);
 }
 
-fn current_time() -> String {
-    format!("{}", Local::now().format("%Y-%m-%d %H:%M:%S"))
-}
+

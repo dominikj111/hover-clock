@@ -8,9 +8,11 @@ story is done only when confirmed implemented (acceptance met + verification per
 
 The daemon runs on X11 (xfwm4-verified): overlay is hidden until triggered, shows on top-right
 hot-corner dwell (200 ms debounced) or `Super + T`, dismisses on `Esc`, never takes focus, never
-flashes in the taskbar (GDK skip-taskbar hints, fix on M1/M2), and
-stays invisible to task switchers. **S04 (M3 — Presentation)** is next: full clock widget,
-CSS styling, show/hide transitions, auto-hide.
+flashes in the taskbar (GDK skip-taskbar hints, fix on M1/M2), stays invisible to task
+switchers, and auto-hides (debounced) on corner leave. **S04 (M3 — Presentation)** in progress:
+clock widget (time/day/date, §11), static single style (rounded corners, translucent black,
+§8.3), `decorated(false)` and corner-leave auto-hide landed; show/hide transitions and
+trigger-corner placement remain.
 
 ## Story cards
 

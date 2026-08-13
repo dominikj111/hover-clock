@@ -1,0 +1,36 @@
+/* HoverClock — bundled static style (M3, proposal §8.3).
+ *
+ * Theming note: selectors are class-based so a future theme (S05, config)
+ * is another stylesheet selected wholesale — no code change. The overlay
+ * window node is transparent; the rounded, translucent-black box is the
+ * `.clock-widget` child, so GTK's own box rendering clips the corners.
+ */
+
+window,
+window.background {
+    background-color: transparent;
+}
+
+.clock-widget {
+    background-color: rgba(0, 0, 0, 0.8);
+    border-radius: 12px;
+    padding: 14px 24px;
+}
+
+.clock-time {
+    font-size: 42px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.clock-day {
+    font-size: 15px;
+    margin-top: 4px;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.clock-date {
+    font-size: 13px;
+    margin-top: 2px;
+    color: rgba(255, 255, 255, 0.65);
+}
