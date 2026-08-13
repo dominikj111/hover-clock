@@ -28,8 +28,8 @@ struct ClockWidget {
 }
 
 impl ClockWidget {
-    /// Build the widget tree: a `.clock-shell` (1px white border, 2px
-    /// transparent gap, style.css) wrapping the `.clock-widget` box
+    /// Build the widget tree: a `.clock-shell` (1px white border with a
+    /// 2px margin around it, style.css) wrapping the `.clock-widget` box
     /// (rounded, translucent black) holding the three labels, and fill
     /// them once.
     fn new() -> (gtk::Box, Self) {
@@ -50,8 +50,8 @@ impl ClockWidget {
         root.append(&day);
         root.append(&date);
 
-        // The shell carries the white border; its 2px padding is the
-        // transparent gap between the border and the black box.
+        // The shell carries the white border; its 2px margin is the
+        // transparent gap between the window edge and the border.
         let shell = gtk::Box::new(gtk::Orientation::Vertical, 0);
         shell.add_css_class("clock-shell");
         shell.append(&root);
