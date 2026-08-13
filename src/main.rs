@@ -225,18 +225,29 @@ fn build_ui(application: &gtk::Application) {
                     }
                     hide_overlay(&glue_window, &glue_backend);
                 }
-                ActivationEvent::WorkspaceChanged => {
-                    // The overlay window stays on the workspace it was
-                    // mapped on; hide it so it does not linger on the
-                    // workspace the user left, and the next trigger shows
-                    // it on the current one (one press, not two).
+                ActivationEvent::WorkspaceChanged { pointer_in_hot_area } => {
                     if let Some(id) = dwell.borrow_mut().take() {
                         id.remove();
                     }
                     if let Some(id) = hide_timer.borrow_mut().take() {
                         id.remove();
                     }
-                    hide_overlay(&glue_window, &glue_backend);
+                    if pointer_in_hot_area {
+                        // Pointer is in the hot area on the new workspace:
+                        // show immediately — the switch re-affirms the
+                        // trigger, no dwell needed. Hide first so the
+                        // window re-maps onto the current workspace (X11
+                        // windows stay on the workspace they were mapped
+                        // on); unmap+map in the same batch is
+                        // imperceptible, so the overlay follows without
+                        // flicker.
+                        hide_overlay(&glue_window, &glue_backend);
+                        show_overlay(&glue_window, &glue_backend);
+                    } else {
+                        // The overlay would otherwise linger on the
+                        // workspace the user left.
+                        hide_overlay(&glue_window, &glue_backend);
+                    }
                 }
             };
 

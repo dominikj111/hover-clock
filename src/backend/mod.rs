@@ -34,11 +34,15 @@ pub enum ActivationEvent {
     Dismiss,
     /// The active workspace changed (EWMH `_NET_CURRENT_DESKTOP`).
     ///
-    /// The overlay window stays on the workspace it was mapped on; the
-    /// consumer hides the overlay so it never lingers on a workspace the
-    /// user has left, keeping the show/hide state consistent (one press
-    /// then reveals it on the current workspace).
-    WorkspaceChanged,
+    /// `pointer_in_hot_area` is re-evaluated on the new workspace (the
+    /// pointer is shared across workspaces, so its position is
+    /// authoritative). When true, the consumer shows the overlay
+    /// immediately — the switch re-affirms the trigger, no dwell needed;
+    /// the consumer hides first so the window re-maps onto the current
+    /// workspace (X11 windows stay on the workspace they were mapped on).
+    /// When false, the consumer hides the overlay, which would otherwise
+    /// linger on the workspace the user left.
+    WorkspaceChanged { pointer_in_hot_area: bool },
 }
 
 /// Contract for platform-specific input activation (proposal §10).

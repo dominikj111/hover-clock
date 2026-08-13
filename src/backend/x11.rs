@@ -24,8 +24,10 @@
 //! shortcuts). Pointer motion and key presses are watched on the root
 //! window (event-driven, no polling); the hot corner is edge-triggered
 //! per monitor. Workspace switches are detected via the EWMH
-//! `_NET_CURRENT_DESKTOP` root property, so the overlay hides when the
-//! user leaves the workspace. `Super + T` is grabbed for the daemon's
+//! `_NET_CURRENT_DESKTOP` root property; the hot area is re-evaluated on
+//! the new workspace, so the overlay follows the pointer into the corner
+//! or hides when the pointer is elsewhere — it never lingers on the
+//! workspace the user left. `Super + T` is grabbed for the daemon's
 //! lifetime, `Esc` only while the overlay is visible (the overlay never
 //! has focus, so dismissal cannot rely on window focus).
 
@@ -293,9 +295,41 @@ mod keysym {
     pub const T: u32 = 0x0054; // XK_T
 }
 
-/// Size of the hot-corner trigger region, in pixels. The trigger is the
-/// top-right corner of each monitor (proposal §5).
+/// Size of the hot-area trigger region, in pixels. The default hot area
+/// is the top-right corner of each monitor (proposal §5); location and
+/// size become configurable in S05 — [`HotArea`] is the seam the config
+/// value replaces.
 const CORNER_SIZE: i32 = 4;
+
+/// The hot-area trigger region, in screen coordinates.
+///
+/// The default is the top-right corner of a monitor. `x`/`y` are
+/// absolute so the region generalizes to any location and size relative
+/// to a monitor; S05 (config) will construct this from TOML.
+#[derive(Clone, Copy, Debug)]
+struct HotArea {
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+}
+
+impl HotArea {
+    /// The top-right `size`×`size` region of `monitor`.
+    fn top_right(monitor: Monitor, size: i32) -> Self {
+        Self {
+            x: monitor.x + monitor.width - size,
+            y: monitor.y,
+            width: size,
+            height: size,
+        }
+    }
+
+    /// True when the point lies inside the region.
+    fn contains(self, x: i32, y: i32) -> bool {
+        self.x <= x && x < self.x + self.width && self.y <= y && y < self.y + self.height
+    }
+}
 
 /// X11 implementation of [`ActivationBackend`].
 pub struct X11ActivationBackend {
@@ -532,8 +566,7 @@ fn handle_event(
                 .monitors
                 .iter()
                 .copied()
-                .find(|m| m.x <= x && x < m.x + m.width && m.y <= y && y < m.y + m.height)
-                .filter(|m| in_top_right_corner(*m, x, y));
+                .find(|m| HotArea::top_right(*m, CORNER_SIZE).contains(x, y));
             match (state.in_corner.take(), corner) {
                 (None, Some(monitor)) => {
                     state.in_corner = Some(monitor);
@@ -558,23 +591,58 @@ fn handle_event(
         // EWMH workspace switch: the WM updates `_NET_CURRENT_DESKTOP`
         // on the root whenever the active workspace changes.
         Event::PropertyNotify(event) => {
-            let mut state = state.borrow_mut();
-            if event.atom != state.desktop_atom {
+            if event.atom != state.borrow().desktop_atom {
                 return;
             }
             // Re-read the value — the WM may have just created the
             // property or updated it. Emit only on an actual change, so
             // repeated notifications do not spam hide/show.
-            match read_current_desktop(conn, root, state.desktop_atom) {
-                Some(desktop) if Some(desktop) != state.last_desktop => {
-                    state.last_desktop = Some(desktop);
-                    out.push(ActivationEvent::WorkspaceChanged);
+            let Some(desktop) = read_current_desktop(conn, root, state.borrow().desktop_atom)
+            else {
+                return;
+            };
+            if Some(desktop) == state.borrow().last_desktop {
+                return;
+            }
+
+            // Workspace switched. Re-evaluate the hot area on the new
+            // workspace with the authoritative pointer position (the
+            // pointer is shared across workspaces, and the WM may warp it
+            // on switch). Pointer in the hot area → the overlay follows;
+            // elsewhere → it hides and must be re-triggered.
+            let pointer = query_pointer(conn, root);
+            let mut state = state.borrow_mut();
+            state.last_desktop = Some(desktop);
+            let corner = pointer.and_then(|(x, y)| {
+                state
+                    .monitors
+                    .iter()
+                    .copied()
+                    .find(|m| HotArea::top_right(*m, CORNER_SIZE).contains(x, y))
+            });
+            match corner {
+                Some(monitor) => {
+                    state.in_corner = Some(monitor);
+                    out.push(ActivationEvent::WorkspaceChanged {
+                        pointer_in_hot_area: true,
+                    });
                 }
-                _ => {}
+                None => {
+                    state.in_corner = None;
+                    out.push(ActivationEvent::WorkspaceChanged {
+                        pointer_in_hot_area: false,
+                    });
+                }
             }
         }
         _ => {}
     }
+}
+
+/// Query the current core-pointer position on the root.
+fn query_pointer(conn: &RustConnection, root: u32) -> Option<(i32, i32)> {
+    let reply = conn.query_pointer(root).ok()?.reply().ok()?;
+    Some((reply.root_x as i32, reply.root_y as i32))
 }
 
 /// Read the current workspace from the EWMH `_NET_CURRENT_DESKTOP`
@@ -587,11 +655,6 @@ fn read_current_desktop(conn: &RustConnection, root: u32, atom: Atom) -> Option<
         .ok()?
         .value32()?
         .next()
-}
-
-/// True when `(x, y)` lies inside the top-right corner region of `monitor`.
-fn in_top_right_corner(monitor: Monitor, x: i32, y: i32) -> bool {
-    x >= monitor.x + monitor.width - CORNER_SIZE && y <= monitor.y + CORNER_SIZE
 }
 
 /// Monitor geometry via RandR 1.5; falls back to the root geometry when
