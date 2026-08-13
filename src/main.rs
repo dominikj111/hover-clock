@@ -28,10 +28,10 @@ struct ClockWidget {
 }
 
 impl ClockWidget {
-    /// Build the widget tree: a `.clock-shell` (1px white border with a
-    /// 2px margin around it, style.css) wrapping the `.clock-widget` box
-    /// (rounded, translucent black) holding the three labels, and fill
-    /// them once.
+    /// Build the widget tree: a `.clock-frame` (painted black margin
+    /// strip, style.css) wrapping the `.clock-widget` box (1px white
+    /// border, rounded, translucent black) holding the three labels, and
+    /// fill them once.
     fn new() -> (gtk::Box, Self) {
         let time = gtk::Label::new(None);
         time.add_css_class("clock-time");
@@ -50,15 +50,17 @@ impl ClockWidget {
         root.append(&day);
         root.append(&date);
 
-        // The shell carries the white border; its 2px margin is the
-        // transparent gap between the window edge and the border.
-        let shell = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        shell.add_css_class("clock-shell");
-        shell.append(&root);
+        // The frame paints the black margin strip; its 2px padding sits
+        // between the window edge and the white border (which lives on
+        // `.clock-widget`), so the border is visible on light desktops
+        // too: black margin - white border - black widget background.
+        let frame = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        frame.add_css_class("clock-frame");
+        frame.append(&root);
 
         let widget = Self { time, day, date };
         widget.update();
-        (shell, widget)
+        (frame, widget)
     }
 
     /// Refresh all labels from the current wall-clock time.

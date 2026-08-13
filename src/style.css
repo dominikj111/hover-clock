@@ -2,9 +2,12 @@
  *
  * Theming note: selectors are class-based so a future theme (S05, config)
  * is another stylesheet selected wholesale — no code change. The overlay
- * window node is transparent; a `.clock-shell` (1px white border with a
- * 2px margin around it) wraps the rounded, translucent-black
- * `.clock-widget` box, so GTK's own box rendering clips the corners.
+ * window node is transparent; a `.clock-frame` (painted black margin
+ * strip) wraps the rounded, translucent-black `.clock-widget` box, which
+ * carries the 1px white border. Visual order on light desktops:
+ * black margin - white border - black widget background; on dark
+ * desktops the margin blends into the background and the white border
+ * outlines the widget.
  */
 
 window,
@@ -12,22 +15,22 @@ window.background {
     background-color: transparent;
 }
 
-/* Box model: 2px margin (transparent gap between window edge and border)
- * → 1px white border → `.clock-widget` inside. The shell has no
- * background, so the desktop shows through the margin. */
-.clock-shell {
-    margin: 2px;
-    border-width: 1px;
-    border-style: solid;
-    border-color: #ffffff;
+/* The strip between the window edge and the white border, painted black
+ * (same translucency as the widget) so the border stays visible against
+ * light desktops and reads as one clean line on dark ones. */
+.clock-frame {
+    background-color: rgba(0, 0, 0, 0.8);
     border-radius: 12px;
-    background-color: transparent;
+    padding: 2px;
 }
 
 .clock-widget {
     background-color: rgba(0, 0, 0, 0.8);
-    /* Concentric with the 12px shell radius minus the 1px border. */
-    border-radius: 11px;
+    border-width: 1px;
+    border-style: solid;
+    border-color: #ffffff;
+    /* Concentric with the 12px frame radius minus its 2px padding. */
+    border-radius: 10px;
     padding: 14px 24px;
 }
 
