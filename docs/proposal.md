@@ -322,10 +322,11 @@ decisions explicit; macOS/Windows are *ports behind the facade contracts* (§10)
   system library. Build deps: `pkg-config` + GTK4 dev headers (`libgtk-4-dev` on
   Debian/Pi OS, `gtk4-devel` on Fedora) + Rust toolchain. ARM (Raspberry Pi) builds
   natively; the GL renderer via Mesa fits the §13 footprint targets.
-- **GTK version floor:** `gtk4-rs 0.11` builds against GTK ≥ 4.0, but the `v4_12` cargo
-  feature requires GTK ≥ 4.12. Debian 12 / Raspberry Pi OS bookworm ship GTK 4.8 → the
-  build needs `v4_12` dropped there (no v4_12-only API is used today, so the feature is
-  pure gating). Debian 13 and current Fedora ship 4.18+.
+- **GTK version floor:** `gtk4-rs 0.11` builds against GTK ≥ 4.0; the crate enables no
+  version-gated feature and uses only base APIs (CSS via `load_from_data`, the 4.0-era
+  equivalent of the 4.12-only `load_from_string`). Debian 12 / Raspberry Pi OS bookworm
+  (GTK 4.8) are expected to build — tested on GTK 4.18 (Debian 13) and CI. Debian 13 and
+  current Fedora ship 4.18+.
 - **Deprecated seam:** `gdk_x11_surface_set_skip_taskbar_hint` / `_skip_pager_hint`
   (M1/M2 taskbar-flash fix) are deprecated since GTK 4.18 and present through 4.20;
   removal breaks the link loudly. They only suppress a transient taskbar flash — the

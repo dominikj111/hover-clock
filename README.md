@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/dominikj111/hover-clock/actions/workflows/ci.yml/badge.svg)](https://github.com/dominikj111/hover-clock/actions/workflows/ci.yml)
 [![MSRV](https://img.shields.io/badge/MSRV-1.92-purple)](https://github.com/dominikj111/hover-clock/blob/main/Cargo.toml)
-[![GTK](https://img.shields.io/badge/GTK-%3E%3D4.12-green)](https://github.com/dominikj111/hover-clock/blob/main/Cargo.toml)
+[![GTK](https://img.shields.io/badge/GTK-4.0%2B-green)](https://github.com/dominikj111/hover-clock/blob/main/Cargo.toml)
 [![Platform](https://img.shields.io/badge/platform-Linux%20(X11)-blue)](#tested-environments)
 [![Wayland](https://img.shields.io/badge/Wayland-planned-yellow)](#wayland-status)
 [![License](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE)
@@ -30,12 +30,25 @@ plan.
 ## Requirements
 
 - Linux with an **X11 session** (Wayland planned — see [Wayland status](#wayland-status))
-- **GTK4 ≥ 4.12** development libraries (`libgtk-4-dev` on Debian/Raspberry Pi OS,
-  `gtk4-devel` on Fedora) + `pkg-config`
 - **Rust ≥ 1.92** (stable; edition 2024)
+- **GTK4 development libraries** — install per distribution, then verify:
 
-> Debian 12 / Raspberry Pi OS bookworm ship GTK 4.8 — drop the `v4_12` cargo feature there
-> (see `docs/proposal.md` §17.1).
+| Distribution | Command |
+| --- | --- |
+| Debian / Raspberry Pi OS / MX Linux | `sudo apt install -y libgtk-4-dev pkg-config` |
+| Fedora | `sudo dnf install -y gtk4-devel pkgconf-pkg-config` |
+| Arch | `sudo pacman -S gtk4 pkg-config` |
+
+Verify with `pkg-config --modversion gtk4` before building.
+
+> **Build fails with “glib-2.0.pc was not found” or “Package gtk4 was not found”?** The GTK4
+> dev libraries are missing — run the install command for your distribution above, then
+> retry.
+>
+> **GTK version floor:** the crate enables no version-gated feature and uses only base GTK4
+> APIs, so it builds against any GTK 4.x — tested on GTK 4.18 (Debian 13) and CI
+> (Ubuntu 24.04+). Debian 12 / Raspberry Pi OS bookworm's GTK 4.8 is expected to work
+> (untested). See `docs/proposal.md` §17.1.
 
 ## Build & run
 
