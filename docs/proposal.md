@@ -2,7 +2,7 @@
 
 **Status:** Early-stage architecture · Core focus: overlay behavior and input activation system
 **Scope:** Lightweight Linux overlay daemon (X11 first, Wayland planned)
-**Version:** 0.2 (draft)
+**Version:** 0.3 (draft)
 
 ## 1. Purpose
 
@@ -310,3 +310,88 @@ Consumers resolve these via the registry; absence of a backend degrades to a dis
 | Early stage | X11 EWMH hints for overlay semantics | `_ABOVE`, `_SKIP_TASKBAR`, `_SKIP_PAGER`, no focus request. |
 | Early stage | **Adopt JigsawFlow pattern + `singleton-registry`** | Flat capability registry, trait contracts, offline-first, graceful degradation, facade-wrapped dependencies — matches the overlay-daemon shape and keeps it extensible. |
 | Early stage | **Daemon/client command pattern (workmeshd-inspired)** | Single binary, dual mode; Unix socket control plane with `Command` trait registry; proven pattern for controlling a long-lived daemon. |
+
+## 17. Compatibility & Portability
+
+**Stance:** Linux-first design. The compatibility record below makes porting and deployment
+decisions explicit; macOS/Windows are *ports behind the facade contracts* (§10), not goals.
+
+### 17.1 Linux distributions
+
+- The X11 stack is pure-Rust (`x11rb` — no libX11 dev dependency) plus GTK4 as the only
+  system library. Build deps: `pkg-config` + GTK4 dev headers (`libgtk-4-dev` on
+  Debian/Pi OS, `gtk4-devel` on Fedora) + Rust toolchain. ARM (Raspberry Pi) builds
+  natively; the GL renderer via Mesa fits the §13 footprint targets.
+- **GTK version floor:** `gtk4-rs 0.11` builds against GTK ≥ 4.0, but the `v4_12` cargo
+  feature requires GTK ≥ 4.12. Debian 12 / Raspberry Pi OS bookworm ship GTK 4.8 → the
+  build needs `v4_12` dropped there (no v4_12-only API is used today, so the feature is
+  pure gating). Debian 13 and current Fedora ship 4.18+.
+- **Deprecated seam:** `gdk_x11_surface_set_skip_taskbar_hint` / `_skip_pager_hint`
+  (M1/M2 taskbar-flash fix) are deprecated since GTK 4.18 and present through 4.20;
+  removal breaks the link loudly. They only suppress a transient taskbar flash — the
+  post-map EWMH state re-application already implemented is the functional fallback.
+
+### 17.2 X11 window managers
+
+| WM / DE | Status | Notes |
+| --- | --- | --- |
+| GNOME (Xorg session) | ✅ | EWMH hints, `_NET_CURRENT_DESKTOP`, `Super + T` grab all honored. |
+| KDE Plasma (X11) | ✅ | KWin honors NOTIFICATION type, ABOVE, skip-taskbar/pager. |
+| xfwm4 (test env) | ✅ | Verified live. |
+| i3 | ⚠️ mostly | i3 ignores `_NET_WM_STATE_ABOVE`; overlay must float — add `for_window [window_type="notification"] floating enable` to the i3 config. A fullscreen window may cover the overlay (verify). |
+
+Workspace tracking (§17.3, X11) degrades to a logged warning on WMs that do not
+advertise `_NET_CURRENT_DESKTOP` — by design, never a crash.
+
+### 17.3 Wayland
+
+- **Current build under XWayland (any Wayland session):** activation works (XWayland
+  synthesizes XI2 root motion; key grabs pass through for keys the compositor does not
+  intercept), but stacking is degraded — the overlay sits inside the XWayland layer and
+  is *never* above native Wayland fullscreen surfaces. Workspace tracking is unavailable
+  (no `_NET_CURRENT_DESKTOP` under XWayland) and degrades gracefully.
+- **M6 layer-shell covers:** wlroots compositors (sway, Hyprland, labwc — including the
+  Raspberry Pi OS Wayland preview) and KWin (Plasma ≥ 5.27).
+- **Mutter (GNOME) does not implement layer-shell and exposes no public alternative** →
+  GNOME Wayland is unreachable for the overlay-above-fullscreen requirement; the Xorg
+  session is the supported path there.
+
+### 17.4 macOS (port, not supported)
+
+Already portable: GTK4 Quartz backend, `chrono`, gio main loop, Unix-socket IPC (with
+`$TMPDIR` fallback for the missing `XDG_RUNTIME_DIR`). Required work:
+
+1. **cfg-gating** — `gdk4-x11`/`x11rb` deps and the `#[link(name = "gtk-4")]` extern block
+   move behind a cargo feature (Linux-only).
+2. **Window backend** — a non-focus-stealing overlay is an `NSPanel` (nonactivating,
+   floating level, `canJoinAllSpaces`); a GTK `NSWindow` cannot be non-activating.
+   **Open decision:** reach into the NSWindow via `objc2-app-kit` (partial semantics) vs.
+   a native NSPanel overlay (widget duplication).
+3. **Activation backend** — Carbon `RegisterEventHotKey` for `Super + T` / `Esc` (no
+   permission needed); `CGEventTap` for the hot corner (requires the Accessibility
+   permission). Nonactivating panels can still become key, so `Esc` arrives via `keyDown`.
+4. **Packaging** — .app bundle carrying the GTK dylibs.
+
+### 17.5 Windows (port, not supported)
+
+1. **cfg-gating** — same as §17.4.1.
+2. **Toolchain** — GTK4 from MSYS2 (`mingw-w64-x86_64-gtk4`, rust-gnu toolchain) or
+   gvsbuild (MSVC).
+3. **Window backend** — `gdk4-win32` exposes the HWND; then `WS_EX_TOOLWINDOW` (no
+   taskbar), `WS_EX_NOACTIVATE` (never takes focus), `WS_EX_TOPMOST` (above fullscreen;
+   exclusive-fullscreen games may still win).
+4. **Activation backend** — `RegisterHotKey` for `Super + T` / `Esc`-while-visible;
+   `SetWindowsHookEx(WH_MOUSE_LL)` for the hot corner.
+5. **IPC** — Rust std has no Unix sockets on Windows: named pipe `\\.\pipe\hoverclock`
+   or TCP loopback behind the `IpcServer` contract; the §15 framing question becomes the
+   transport contract here.
+6. **Packaging** — GTK4 is DLL-based; no single binary (NSIS/Inno/MSIX bundling).
+
+### 17.6 Portability architecture notes
+
+- §10 facades + M4 runtime backend selection are the porting seam; `src/main.rs` still
+  hard-wires X11 today.
+- `WindowBackend::configure` is GTK-typed — constrains the native macOS panel path;
+  resolve at port time.
+- IPC transport is not yet abstracted (M5); the §15 socket/framing questions double as
+  the Windows transport contract.

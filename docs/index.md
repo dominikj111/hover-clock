@@ -19,3 +19,4 @@ on a story card; refresh this map whenever the proposal is amended.
 | Milestones / roadmap | §14 |
 | Open questions | §15 |
 | Decision log | §16 |
+| Compatibility & portability (distros, WMs, Wayland, macOS/Windows) | §17 |
