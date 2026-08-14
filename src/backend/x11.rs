@@ -41,6 +41,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use x11rb::connection::Connection;
 use x11rb::errors::{ConnectError, ReplyError};
+use x11rb::protocol::Event;
 use x11rb::protocol::randr::ConnectionExt as RandrConnectionExt;
 use x11rb::protocol::xinput::{self, ConnectionExt as XinputConnectionExt, XIEventMask};
 use x11rb::protocol::xproto::{
@@ -48,7 +49,6 @@ use x11rb::protocol::xproto::{
     ConnectionExt as XProtoConnectionExt, EventMask, GrabMode, KeyButMask, Keycode, ModMask,
     PropMode,
 };
-use x11rb::protocol::Event;
 use x11rb::rust_connection::RustConnection;
 use x11rb::wrapper::ConnectionExt;
 
@@ -125,7 +125,10 @@ impl WindowBackend for X11WindowBackend {
         let atoms = match self.intern_atoms() {
             Ok(atoms) => atoms,
             Err(err) => {
-                glib::g_warning!("hover-clock", "X11 backend: failed to intern EWMH atoms: {err}");
+                glib::g_warning!(
+                    "hover-clock",
+                    "X11 backend: failed to intern EWMH atoms: {err}"
+                );
                 return;
             }
         };
@@ -133,7 +136,10 @@ impl WindowBackend for X11WindowBackend {
         // Pre-map hints: the window manager reads these when it manages the
         // window. Configure runs at realize time, before the map request.
         if let Err(err) = self.write_static_hints(xid, &atoms) {
-            glib::g_warning!("hover-clock", "X11 backend: failed to apply overlay hints: {err}");
+            glib::g_warning!(
+                "hover-clock",
+                "X11 backend: failed to apply overlay hints: {err}"
+            );
         }
 
         // Post-map: GTK rewrites WM_HINTS when showing the surface, and the
@@ -384,13 +390,19 @@ impl X11ActivationBackend {
         let conn = Arc::clone(&self.conn);
         let root = self.root;
         let state = Rc::clone(&self.state);
-        let source =
-            gio::prelude::SocketExtManual::create_source(&socket, glib::IOCondition::IN, None::<&gio::Cancellable>, Some("hover-clock-x11-activation"), glib::Priority::DEFAULT, move |_, _| {
+        let source = gio::prelude::SocketExtManual::create_source(
+            &socket,
+            glib::IOCondition::IN,
+            None::<&gio::Cancellable>,
+            Some("hover-clock-x11-activation"),
+            glib::Priority::DEFAULT,
+            move |_, _| {
                 for event in poll_events(&conn, root, &state) {
                     dispatch(event);
                 }
                 glib::ControlFlow::Continue
-            });
+            },
+        );
         Ok(source.attach(None))
     }
 }
@@ -464,10 +476,14 @@ impl ActivationBackend for X11ActivationBackend {
             let Some(keycode) = toggle_keycode else {
                 continue;
             };
-            match self
-                .conn
-                .grab_key(false, self.root, mask, keycode, GrabMode::ASYNC, GrabMode::ASYNC)
-            {
+            match self.conn.grab_key(
+                false,
+                self.root,
+                mask,
+                keycode,
+                GrabMode::ASYNC,
+                GrabMode::ASYNC,
+            ) {
                 Ok(cookie) => {
                     if let Err(err) = cookie.check() {
                         glib::g_warning!(
@@ -510,16 +526,25 @@ impl ActivationBackend for X11ActivationBackend {
         drop(state);
         for modifiers in lock_state_combos() {
             if visible {
-                match self
-                    .conn
-                    .grab_key(false, self.root, modifiers, esc, GrabMode::ASYNC, GrabMode::ASYNC)
-                {
+                match self.conn.grab_key(
+                    false,
+                    self.root,
+                    modifiers,
+                    esc,
+                    GrabMode::ASYNC,
+                    GrabMode::ASYNC,
+                ) {
                     Ok(cookie) => {
                         if let Err(err) = cookie.check() {
-                            glib::g_warning!("hover-clock", "X11 activation: Esc grab failed: {err}");
+                            glib::g_warning!(
+                                "hover-clock",
+                                "X11 activation: Esc grab failed: {err}"
+                            );
                         }
                     }
-                    Err(err) => glib::g_warning!("hover-clock", "X11 activation: Esc grab failed: {err}"),
+                    Err(err) => {
+                        glib::g_warning!("hover-clock", "X11 activation: Esc grab failed: {err}")
+                    }
                 }
             } else if let Err(err) = self.conn.ungrab_key(esc, self.root, modifiers) {
                 glib::g_warning!("hover-clock", "X11 activation: Esc ungrab failed: {err}");

@@ -66,8 +66,7 @@ impl ClockWidget {
     /// Refresh all labels from the current wall-clock time.
     fn update(&self) {
         let now = Local::now();
-        self.time
-            .set_text(&now.format("%H:%M:%S").to_string());
+        self.time.set_text(&now.format("%H:%M:%S").to_string());
         self.day.set_text(&now.format("%A").to_string());
         self.date.set_text(&now.format("%-d %B %Y").to_string());
     }
@@ -225,7 +224,9 @@ fn build_ui(application: &gtk::Application) {
                     }
                     hide_overlay(&glue_window, &glue_backend);
                 }
-                ActivationEvent::WorkspaceChanged { pointer_in_hot_area } => {
+                ActivationEvent::WorkspaceChanged {
+                    pointer_in_hot_area,
+                } => {
                     if let Some(id) = dwell.borrow_mut().take() {
                         id.remove();
                     }
@@ -284,5 +285,3 @@ fn hide_overlay(window: &gtk::ApplicationWindow, backend: &Rc<backend::X11Activa
     window.set_visible(false);
     backend.set_overlay_visible(false);
 }
-
-
