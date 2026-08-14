@@ -266,7 +266,10 @@ Consumers resolve these via the registry; absence of a backend degrades to a dis
 ## 11. Widget System
 
 Widgets are **pure UI components** with no system side effects; new widgets must **not** modify
-activation logic. Overlay layout remains composable — vertical stack model preferred.
+activation logic. Overlay layout remains composable — vertical stack model preferred. Widgets
+follow the **state/render split** (JigsawFlow rendering facade): a widget owns its state and
+produces its widget tree via a `view()` step; the renderer is a swappable adapter behind a
+contract (§11.4).
 
 ### 11.1 Composite widget model (Weaver Desktop fabric)
 
@@ -296,7 +299,23 @@ of the month today is — no selection, no navigation, no date picking. It is a 
 a `layout` month grid (weekday header + day-cell `label`s) with today's cell highlighted via a
 CSS class (`.calendar-today`). Non-interactive (no pointer handlers).
 
-### 11.4 Widget contract
+### 11.4 Render contract (swappable renderer)
+
+GTK is the current renderer, not the only one. Following the JigsawFlow rendering-facade
+principle (§6.1 of the JigsawFlow guidelines): widgets keep state/logic separate from
+rendering — a widget updates its state and produces a declarative widget tree; a
+`RenderBackend` contract describes what the app needs from any renderer, and each toolkit
+implements it as an adapter (`GtkRenderBackend` today; `QtRenderBackend`, `EguiRenderBackend`
+possible later). Swapping the engine then means writing an adapter — application flow, state,
+and business logic stay untouched.
+
+**Acknowledged trade-off:** a uniform render contract flattens toolkit-specific idioms (GTK is
+retained-mode, egui immediate-mode). Accepted deliberately: renderer replaceability outranks
+idiom fidelity. GTK specifics stay at the rendering boundary (§8); the composite model (§11.1)
+is renderer-neutral by construction, so the widget tree itself does not change when the engine
+does.
+
+### 11.5 Data-plane widget contract
 
 Later, widgets may be driven over the socket (data plane) — a widget contract
 (`WidgetProvider`) will be added when that lands.
@@ -352,6 +371,7 @@ Later, widgets may be driven over the socket (data plane) — a widget contract
 | Early stage | X11 EWMH hints for overlay semantics | `_ABOVE`, `_SKIP_TASKBAR`, `_SKIP_PAGER`, no focus request. |
 | Early stage | **Adopt JigsawFlow pattern + `singleton-registry`** | Flat capability registry, trait contracts, offline-first, graceful degradation, facade-wrapped dependencies — matches the overlay-daemon shape and keeps it extensible. |
 | Early stage | **Daemon/client command pattern (workmeshd-inspired)** | Single binary, dual mode; Unix socket control plane with `Command` trait registry; proven pattern for controlling a long-lived daemon. |
+| 2026-08 | **State/render split** — widgets own state and produce a widget tree via `view()`; the renderer is a swappable adapter behind a `RenderBackend` contract (JigsawFlow rendering facade §6.1) | GTK stays replaceable (Qt/egui) without touching application flow; matches the shell-family pattern (Weaver egui shell, iced-shell) |
 
 ## 17. Compatibility & Portability
 
