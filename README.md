@@ -151,7 +151,7 @@ untouched, so the repo is always ready for `cargo run`.
 | --- | --- |
 | Debian GNU/Linux 13 (trixie), Xfce 4.20 (xfce4-session 4.20.2), libgtk-4-1 4.18.6+ds-2 | ✅ |
 | MX Linux (trixie-based), Xfce 4.20 | ✅ |
-| Raspberry Pi 4 Model B Rev 1.4 (aarch64) | ✅ |
+| Raspberry Pi 4 Model B Rev 1.4 (aarch64), trixie-based Pi OS (GTK 4.18.6) | ⚠️ builds & runs; Wayland session → activation degraded (hot-corner/shortcut), see §17.3 — use the X11 session for full behavior |
 
 CI additionally builds and lints on `ubuntu-latest` with the stable toolchain and the
 declared MSRV (1.92). The compatibility record for other distributions, window managers
