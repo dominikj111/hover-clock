@@ -62,7 +62,7 @@
 - `keysym::T` scans the keyboard mapping for `XK_T`/`XK_t`; exotic layouts where the T key has
   neither are unsupported (grab silently skipped — hot corner still works).
 - `application_id` is still the S01 leftover (`com.github.gtk-rs.examples.clock`); revisit with
-  the binary's real identity (S06/M5).
+  the binary's real identity (S07/M6).
 
 ## Hand-off to S04
 

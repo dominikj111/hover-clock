@@ -126,7 +126,7 @@ desktop session, not the init:
   Gentoo) — `install.sh` detects a non-systemd init and installs an **XDG autostart**
   entry (`~/.config/autostart/hover-clock.desktop`), honored by Xfce/GNOME/KDE sessions
   regardless of init. Trade-offs: no crash-restart, and upgrading a *running* daemon
-  needs a session restart until the socket control plane (M5) lands.
+  needs a session restart until the socket control plane (M6) lands.
 
 ### Logs
 
@@ -169,7 +169,7 @@ declared MSRV (1.92). The compatibility record for other distributions, window m
 
 The current X11 build runs under XWayland on Wayland sessions: activation works, but
 stacking is degraded — the overlay cannot float above *native* Wayland fullscreen windows.
-A layer-shell backend (M6) is planned; note that Mutter/GNOME does not implement
+A layer-shell backend (M7) is planned; note that Mutter/GNOME does not implement
 layer-shell, so GNOME Wayland is out of reach — use the Xorg session there
 (`docs/proposal.md` §17.3).
 

@@ -67,7 +67,9 @@ All triggers are **edge-triggered** and debounced to avoid flicker loops.
 - Must remain **visible above fullscreen applications**.
 - Must **not appear** in task switchers, panels, or window lists.
 - Must maintain a **minimal CPU and memory footprint**.
-- Show/hide must feel instant (< 50 ms target perception).
+- Show/hide must feel instant (< 50 ms target perception for trigger-to-visible latency).
+  The M3 fade in/out is a short opacity transition (~100–150 ms) layered on top — the window
+  is visible first, then fades — so perceived latency stays under budget.
 - **Offline-first:** the overlay, clock, activation, and control plane must work with no network at all.
 
 ## 7. System Architecture
@@ -174,10 +176,15 @@ The daemon is controlled through a Unix socket by an included client module — 
 ```text
 OverlayWindow
 └─ GtkOverlay
-   └─ GtkBox
-      ├─ TimeLabel
-      ├─ DayLabel
-      └─ DateLabel
+   └─ GtkBox                          (layout: vertical stack)
+      ├─ ClockWidget                  (compound: stack + labels, M3)
+      │    ├─ TimeLabel
+      │    ├─ DayLabel
+      │    └─ DateLabel
+      └─ CalendarWidget               (compound: month grid, M4)
+           ├─ WeekdayHeader
+           ├─ DayCell 1 … DayCell N   (today's cell: .calendar-today)
+           └─ …
 ```
 
 ### 8.2 Render pipeline (managed by GTK)
@@ -209,6 +216,11 @@ time.add_css_class("clock");
 ### 8.3 Styling
 
 CSS controls the visual layer: rounded corners, blur-like appearance, padding, transparency, drop shadow — without writing rendering code.
+
+Fade in/out (M3) is the show/hide transition: overlay opacity animates via `set_opacity`
+(or CSS `opacity` + GTK transitions). Fade-out completes before `set_visible(false)`;
+fade-in starts immediately after showing, keeping trigger-to-visible latency within the §6
+budget.
 
 ### 8.4 When custom drawing is justified
 
@@ -253,12 +265,41 @@ Consumers resolve these via the registry; absence of a backend degrades to a dis
 
 ## 11. Widget System
 
-- **Clock widget** is the first and only initial widget (time, day, date labels in a vertical stack).
-- Widgets are **pure UI components** with no system side effects.
-- New widgets must **not** modify activation logic.
-- Overlay layout remains composable — vertical stack model preferred.
-- Calendar widget is the planned second widget (listed in the daemon sketch above).
-- Later, widgets may be driven over the socket (data plane) — a widget contract (`WidgetProvider`) will be added when that lands.
+Widgets are **pure UI components** with no system side effects; new widgets must **not** modify
+activation logic. Overlay layout remains composable — vertical stack model preferred.
+
+### 11.1 Composite widget model (Weaver Desktop fabric)
+
+The widget model follows Weaver Desktop's UI-fabric design: **widgets may contain widgets** —
+an overlay widget is a tree, not a flat list. A widget is either a **layout** (container that
+arranges child widgets), a **leaf** (content), or a **compound** widget (a named tree of
+layouts and leaves). Layouts carry declarative placement properties (`direction`, `spacing`,
+`padding`, `align`); interaction surfaces as **semantic events, never raw input** (e.g. a
+`click` leaf emits `activated`).
+
+| Widget kind | Role | Examples |
+| --- | --- | --- |
+| `layout` | Container — arranges child widgets | vertical/horizontal stack, month grid |
+| `label` | Leaf — static text display | time, day, date, calendar day cells |
+| `click` | Leaf — clickable, button semantics | version-notification "upgrade" action |
+| compound | Named tree of layouts + leaves | `clock` (stack + labels), `calendar` (grid + day cells) |
+
+### 11.2 Clock widget
+
+First widget (M3): time/day/date labels in a vertical stack — a `layout` containing `label`
+leaves (§8.1).
+
+### 11.3 Calendar widget
+
+Second widget (M4): a **minimal month calendar** whose only purpose is to recognise what day
+of the month today is — no selection, no navigation, no date picking. It is a compound widget:
+a `layout` month grid (weekday header + day-cell `label`s) with today's cell highlighted via a
+CSS class (`.calendar-today`). Non-interactive (no pointer handlers).
+
+### 11.4 Widget contract
+
+Later, widgets may be driven over the socket (data plane) — a widget contract
+(`WidgetProvider`) will be added when that lands.
 
 ## 12. Configuration
 
@@ -282,17 +323,18 @@ Consumers resolve these via the registry; absence of a backend degrades to a dis
 | **M0 — Current** | GTK4-rs project scaffold; single clock label; classic window (repo baseline). |
 | **M1 — Overlay behavior** | EWMH hints (`_ABOVE`, `_SKIP_TASKBAR`, `_SKIP_PAGER`); non-focusable window; X11 `WindowBackend`. |
 | **M2 — Activation** | X11 `ActivationBackend`: hot-corner detection (debounced, edge-triggered) + global `Super + T` + `Esc` dismiss. |
-| **M3 — Presentation** | Full clock widget (time/day/date), CSS styling, show/hide transitions, auto-hide timer. |
-| **M4 — Registry & config** | Adopt `singleton-registry`: flat capability registry, facade contracts (`WindowBackend`, `ActivationBackend`, `TimeSource`, `Config`), TOML config with live hot-swap reload. |
-| **M5 — IPC (daemon/client)** | Dual-mode binary, Unix socket listener, `Command` registry, client module with retries; `ping`, `show`, `hide`, `toggle`, `status`, `version`, `commands`, `stop`. |
-| **M6 — Wayland** | Layer-shell backend behind `WindowBackend` / `ActivationBackend` contracts. |
+| **M3 — Presentation** | Full clock widget (time/day/date), CSS styling, fade in/out show/hide transitions, auto-hide timer. |
+| **M4 — Calendar widget** | Minimal month calendar highlighting today; composite widget model — widgets containing widgets (layout + leaf kinds, Weaver Desktop fabric, §11.1). |
+| **M5 — Registry & config** | Adopt `singleton-registry`: flat capability registry, facade contracts (`WindowBackend`, `ActivationBackend`, `TimeSource`, `Config`), TOML config with live hot-swap reload. |
+| **M6 — IPC (daemon/client)** | Dual-mode binary, Unix socket listener, `Command` registry, client module with retries; `ping`, `show`, `hide`, `toggle`, `status`, `version`, `commands`, `stop`. |
+| **M7 — Wayland** | Layer-shell backend behind `WindowBackend` / `ActivationBackend` contracts. |
 | **Later (private exploration)** | Notifications, toast messaging, template-driven widgets, socket data-plane API, overlay-shell direction. |
 
 ## 15. Open Questions
 
 - Hot-corner geometry on multi-monitor setups: all monitors or primary only?
 - Wayland hot-corner detection strategy (pointer constraints / global position APIs).
-- Debounce and auto-hide timing values (defaults + configurability).
+- Debounce, auto-hide, and fade in/out timing values (defaults + configurability).
 - Overlay placement: fixed corner vs. follows pointer corner?
 - Socket path/ownership: `$XDG_RUNTIME_DIR` vs `/tmp`; socket permissions (0600?).
 - Socket protocol evolution: newline framing vs JSON-RPC once the data plane lands (JigsawFlow's Phase-1 transport is TCP/localhost + JSON-RPC; workmeshd uses newline framing — v1 stays simple).
@@ -351,7 +393,7 @@ advertise `_NET_CURRENT_DESKTOP` — by design, never a crash.
   intercept), but stacking is degraded — the overlay sits inside the XWayland layer and
   is *never* above native Wayland fullscreen surfaces. Workspace tracking is unavailable
   (no `_NET_CURRENT_DESKTOP` under XWayland) and degrades gracefully.
-- **M6 layer-shell covers:** wlroots compositors (sway, Hyprland, labwc — including the
+- **M7 layer-shell covers:** wlroots compositors (sway, Hyprland, labwc — including the
   Raspberry Pi OS Wayland preview) and KWin (Plasma ≥ 5.27).
 - **Mutter (GNOME) does not implement layer-shell and exposes no public alternative** →
   GNOME Wayland is unreachable for the overlay-above-fullscreen requirement; the Xorg
@@ -390,9 +432,9 @@ Already portable: GTK4 Quartz backend, `chrono`, gio main loop, Unix-socket IPC 
 
 ### 17.6 Portability architecture notes
 
-- §10 facades + M4 runtime backend selection are the porting seam; `src/main.rs` still
+- §10 facades + M5 runtime backend selection are the porting seam; `src/main.rs` still
   hard-wires X11 today.
 - `WindowBackend::configure` is GTK-typed — constrains the native macOS panel path;
   resolve at port time.
-- IPC transport is not yet abstracted (M5); the §15 socket/framing questions double as
+- IPC transport is not yet abstracted (M6); the §15 socket/framing questions double as
   the Windows transport contract.

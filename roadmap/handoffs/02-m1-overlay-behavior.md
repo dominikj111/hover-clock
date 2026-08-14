@@ -52,10 +52,10 @@
   since 4.18) at realize, so GDK writes the atoms on its own connection before the map request.
   Verified: state present at MapNotify, no tasklist entry across 8 show/hide cycles, `Esc`/
   `Super + T`/corner unaffected.
-- M1 did **not** adopt `singleton-registry` (that is S05/M4 by roadmap) — `WindowBackend` is a
+- M1 did **not** adopt `singleton-registry` (that is S06/M5 by roadmap) — `WindowBackend` is a
   plain trait used directly; the registry will register it later.
 - `application_id` still says `com.github.gtk-rs.examples.clock` (S01 leftover) — revisit when
-  the binary gets its real identity (S06/M5).
+  the binary gets its real identity (S07/M6).
 
 ## Hand-off to S03
 

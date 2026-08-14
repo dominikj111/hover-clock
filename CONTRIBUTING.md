@@ -29,7 +29,7 @@ Minimum supported Rust version: **1.92** (declared in `Cargo.toml`; enforced in 
 
 Requirements: a Linux system with an X11 session, GTK4 dev headers
 (`libgtk-4-dev` on Debian/Raspberry Pi OS, `gtk4-devel` on Fedora), `pkg-config`, and a Rust
-toolchain ≥ 1.92. Wayland is planned (M6, layer-shell); on a Wayland session the X11 build
+toolchain ≥ 1.92. Wayland is planned (M7, layer-shell); on a Wayland session the X11 build
 runs under XWayland with degraded stacking — see proposal §17.
 
 ## Development workflow (one story at a time)
