@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Swap from dev mode back to production: restores the stashed production
+# binary(ies) to their original locations (unlink/relink — instant,
+# offline, no rebuild, no re-download) and restarts the daemon.
+#
+# Usage: ./scripts/swap-to-prod.sh
+#
+# To get the *newest* version instead of the stashed one, run
+# ./scripts/upgrade.sh (source build) or download the latest GitHub
+# release tarball while in production mode.
+
+set -euo pipefail
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/hover-clock"
+STASH_DIR="$STATE_DIR/prod-bin"
+STATE_FILE="$STATE_DIR/state"
+UNIT_DIR="$HOME/.config/systemd/user"
+AUTOSTART_DIR="$HOME/.config/autostart"
+
+if [ ! -f "$STATE_FILE" ]; then
+    echo "No saved production install found (swap state is empty)."
+    echo "Install production with ./scripts/install.sh or download the latest"
+    echo "GitHub release tarball, then swap-to-dev / swap-to-prod as usual."
+    exit 1
+fi
+
+echo "==> Stopping dev instances"
+pkill -x hover-clock 2>/dev/null || true
+
+service=0
+autostart=0
+while IFS= read -r line; do
+    case "$line" in
+        service=*)
+            service="${line#service=}"
+            ;;
+        autostart=*)
+            autostart="${line#autostart=}"
+            ;;
+        bin\ *)
+            rest="${line#bin }"
+            stash="${rest%% *}"
+            orig="${rest#* }"
+            if [ -f "$stash" ]; then
+                if [ -w "$(dirname "$orig")" ]; then
+                    echo "==> Restoring $orig"
+                    mkdir -p "$(dirname "$orig")"
+                    mv -f "$stash" "$orig"
+                else
+                    echo "!! cannot restore $orig (directory not writable — restore manually)"
+                fi
+            else
+                echo "!! stash missing for $orig — skipping"
+            fi
+            ;;
+    esac
+done < "$STATE_FILE"
+rm -f "$STATE_FILE"
+rmdir "$STASH_DIR" 2>/dev/null || true
+
+if [ "$autostart" = "1" ] && [ -f "$STATE_DIR/autostart/hover-clock.desktop" ]; then
+    echo "==> Restoring autostart entry"
+    mkdir -p "$AUTOSTART_DIR"
+    mv "$STATE_DIR/autostart/hover-clock.desktop" "$AUTOSTART_DIR/hover-clock.desktop"
+    rmdir "$STATE_DIR/autostart" 2>/dev/null || true
+fi
+
+if [ "$service" = "1" ] && [ -f "$UNIT_DIR/hover-clock.service" ]; then
+    systemctl --user daemon-reload
+    echo "==> Starting the daemon"
+    systemctl --user enable --now hover-clock.service
+elif [ "$autostart" = "1" ]; then
+    echo "==> Autostart entry restored — the daemon starts at next login"
+else
+    echo "==> No daemon registration found; run ./scripts/install.sh to register"
+fi
+
+echo "Back to production."

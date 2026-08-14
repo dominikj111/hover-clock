@@ -55,11 +55,69 @@ The daemon starts with the overlay hidden. Triggers:
 
 The overlay never appears in the taskbar, never shows in Alt-Tab, and never takes focus.
 
+## Install as a daemon
+
+The overlay is designed to run as a **session daemon**: start automatically at login,
+restart on crash, upgrade in place without touching the desktop session.
+
+| Command | Effect |
+| --- | --- |
+| `./scripts/install.sh` | Build release, install to `~/.local/bin`, register + start the daemon (mechanism per init, below) |
+| `./scripts/upgrade.sh [branch]` | Pull latest, rebuild, restart the running daemon seamlessly (the overlay is transient — a restart between dwells is imperceptible) |
+| `./scripts/swap-to-dev.sh` | Stop the daemon, **stash the installed binary aside** (unlink), then `cargo run` from source |
+| `./scripts/swap-to-prod.sh` | **Relink** the stashed binary back and restart the daemon — instant, offline, no rebuild/re-download |
+| `./scripts/uninstall.sh` | Permanently remove: service/autostart entry, binaries, and swap stash |
+
+Production installs are **unlinked, never deleted** when you switch to dev, and relinked on
+return — the swap is instant and offline. The scripts discover the production binary at its
+install location (`~/.local/bin` from `install.sh` or a GitHub release tarball; `~/.cargo/bin`
+from `cargo install`) and restore it to the exact same path. Getting the *newest* version is
+`./scripts/upgrade.sh` while in production mode, or downloading the latest GitHub release.
+
+Manual alternatives: `cargo install --path .` (installs to `~/.cargo/bin`) or download the
+release tarball from GitHub Releases and run the binary directly.
+
+> **Dependencies:** the binary links dynamically to system GTK4 (≥ 4.12) — release
+> tarballs do not bundle it. Install `libgtk-4-1` (Debian/Raspberry Pi OS) or `gtk4`
+> (Fedora) first. The footprint stays small because GTK4 is shared with the desktop.
+
+### Init systems
+
+The daemon is a *session* process (it needs the X session, never root), so it hooks the
+desktop session, not the init:
+
+- **systemd** (Debian/Fedora/MX with systemd boot) — `install.sh` installs a systemd
+  *user* service (`~/.config/systemd/user/hover-clock.service`): auto-start at login,
+  restart on crash, clean stop/start.
+- **sysvinit / OpenRC / runit** (MX with sysvinit boot, Devuan, antiX, Alpine, Void,
+  Gentoo) — `install.sh` detects a non-systemd init and installs an **XDG autostart**
+  entry (`~/.config/autostart/hover-clock.desktop`), honored by Xfce/GNOME/KDE sessions
+  regardless of init. Trade-offs: no crash-restart, and upgrading a *running* daemon
+  needs a session restart until the socket control plane (M5) lands.
+
+### Dev workflow
+
+`cargo run` starts a second instance, which would fight the daemon over the same X grabs
+(duplicate overlays). The swap scripts keep daemon and dev mode cleanly separated without
+ever losing the production install:
+
+```bash
+./scripts/swap-to-dev.sh                # stop daemon, stash binary, cargo run
+./scripts/swap-to-dev.sh -- --some-arg  # with extra arguments
+./scripts/swap-to-prod.sh               # relink binary, daemon back up
+```
+
+During dev the daemon registration is hidden (service disabled, autostart entry moved
+aside), so a login while in dev mode cannot start a daemon with a missing binary.
+`./scripts/uninstall.sh` removes the production install completely — the source tree stays
+untouched, so the repo is always ready for `cargo run`.
+
 ## Tested environments
 
 | Environment | Status |
 | --- | --- |
 | Debian GNU/Linux 13 (trixie), Xfce 4.20 (xfce4-session 4.20.2), libgtk-4-1 4.18.6+ds-2 | ✅ |
+| MX Linux (trixie-based), Xfce 4.20 | ✅ |
 | Raspberry Pi 4 Model B Rev 1.4 (aarch64) | ✅ |
 
 CI additionally builds and lints on `ubuntu-latest` with the stable toolchain and the

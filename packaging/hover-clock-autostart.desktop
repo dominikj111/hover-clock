@@ -1,0 +1,14 @@
+# XDG autostart entry — the init-agnostic fallback for non-systemd systems
+# (sysvinit, OpenRC, runit: MX with sysvinit boot, Devuan, antiX, Alpine,
+# Void, Gentoo). Session daemons belong to the desktop session, not the
+# init, so this entry is honored by Xfce/GNOME/KDE regardless of init.
+#
+# install.sh resolves __BIN_DIR__ to the actual install path; the file
+# lands in ~/.config/autostart/hover-clock.desktop.
+
+[Desktop Entry]
+Type=Application
+Name=HoverClock
+Comment=Transient overlay daemon — clock on demand (hot corner / Super+T)
+Exec=__BIN_DIR__/hover-clock
+Terminal=false

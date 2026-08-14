@@ -95,6 +95,20 @@ trigger-corner placement remain.
 - **Design refs:** §10, §15 (layer-shell anchor/layer choice)
 - **Hand-off:** pending
 
+### S08 — Version notification widget ⬜
+
+- **Status:** ⬜ backlog
+- **Goal:** When a newer release exists, the overlay shows a small non-intrusive widget
+  (e.g. under the clock) — click to upgrade.
+- **Deliverables:** version check against the GitHub releases API with **offline-first
+  degradation** (no network → no widget, no errors, no polling spam); click-to-upgrade
+  action (runs the swap/upgrade flow and restarts the daemon seamlessly); refresh policy.
+- **Acceptance:** widget appears only when a newer version is known; offline shows nothing;
+  click upgrades and restarts the daemon without disturbing the session.
+- **Design refs:** §2 (widget growth path), §7.4 (data plane, later), §13 (footprint —
+  low-frequency check, no polling)
+- **Hand-off:** pending
+
 ## Later (private exploration)
 
 Notifications, toast messaging, template-driven widgets, socket data-plane API, overlay-shell

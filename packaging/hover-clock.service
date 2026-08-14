@@ -1,0 +1,22 @@
+# systemd *user* unit — HoverClock runs in the graphical session as the
+# logged-in user (needs X11 access; never root). Auto-starts with the
+# session via graphical-session.target, which Xfce/GNOME/KDE raise under
+# systemd. Stop/start with:
+#   systemctl --user stop hover-clock
+#   systemctl --user start hover-clock
+
+[Unit]
+Description=HoverClock — transient overlay daemon (clock on demand)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/hover-clock
+Restart=on-failure
+RestartSec=3
+# Only needed if your desktop does not raise graphical-session.target:
+# Environment=DISPLAY=:0
+
+[Install]
+WantedBy=graphical-session.target
