@@ -42,7 +42,20 @@ while IFS= read -r line; do
             stash="${rest%% *}"
             orig="${rest#* }"
             if [ -f "$stash" ]; then
-                if [ -w "$(dirname "$orig")" ]; then
+                if [ -e "$orig" ]; then
+                    # Never clobber: if a newer binary appeared at the original
+                    # path during dev (re-install, cargo install --force, new
+                    # GitHub tarball), keep it and drop the stale stash.
+                    if cmp -s "$orig" "$stash"; then
+                        echo "==> $orig already in place (identical) — dropping stash"
+                        rm -f "$stash"
+                    else
+                        echo "!! $orig exists and differs from the stashed binary"
+                        echo "   (newer version installed during dev?) — keeping the existing one,"
+                        echo "   discarding the stale stash."
+                        rm -f "$stash"
+                    fi
+                elif [ -w "$(dirname "$orig")" ]; then
                     echo "==> Restoring $orig"
                     mkdir -p "$(dirname "$orig")"
                     mv -f "$stash" "$orig"

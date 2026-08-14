@@ -69,10 +69,30 @@ restart on crash, upgrade in place without touching the desktop session.
 | `./scripts/uninstall.sh` | Permanently remove: service/autostart entry, binaries, and swap stash |
 
 Production installs are **unlinked, never deleted** when you switch to dev, and relinked on
-return — the swap is instant and offline. The scripts discover the production binary at its
-install location (`~/.local/bin` from `install.sh` or a GitHub release tarball; `~/.cargo/bin`
-from `cargo install`) and restore it to the exact same path. Getting the *newest* version is
-`./scripts/upgrade.sh` while in production mode, or downloading the latest GitHub release.
+return — the swap is instant and offline. The scripts **discover** the production binary
+rather than presuming a path: `~/.local/bin` (install.sh or a GitHub release tarball),
+`$CARGO_HOME/bin` (cargo install), and every directory on `PATH` are scanned, and the
+binary is restored to its exact original path. Restoring **never clobbers**: if a newer
+binary appeared at the original path while you were in dev mode (re-install,
+`cargo install --force`, a fresh release tarball), the existing one is kept and the stale
+stash is discarded with a notice.
+
+> **cargo install note:** while the binary is stashed (dev mode), `cargo uninstall
+> hover-clock` cannot find it — swap back to production
+> (`./scripts/swap-to-prod.sh`) first.
+
+Getting the *newest* version is `./scripts/upgrade.sh` while in production mode, or
+downloading the latest GitHub release (see [Releases](#releases)).
+
+## Releases
+
+Versioning is semver (`0.x` for now), with `Cargo.toml` as the single source of truth.
+Publishing is **main-only**: create a tag `vX.Y.Z` on `main` (matching the `Cargo.toml`
+version), push it, and the release pipeline — guarded so tags pointing elsewhere or with a
+version mismatch are rejected — builds release binaries for **x86_64** and **aarch64**
+(Raspberry Pi) and uploads tarballs + SHA-256 checksums to the GitHub release page for that
+tag. Extract a tarball into `~/.local/bin` (or run `./scripts/install.sh` to build from
+source).
 
 Manual alternatives: `cargo install --path .` (installs to `~/.cargo/bin`) or download the
 release tarball from GitHub Releases and run the binary directly.

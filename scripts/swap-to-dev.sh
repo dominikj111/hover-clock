@@ -14,9 +14,14 @@
 #
 # Usage: ./scripts/swap-to-dev.sh [cargo run args...]
 #
-# Discovers the production binary at the known install locations
-# (~/.local/bin — install.sh / GitHub release tarball; ~/.cargo/bin —
-# cargo install) plus anywhere else it is found on PATH.
+# Discovers the production binary rather than presuming a path: the known
+# install locations (~/.local/bin — install.sh / GitHub release tarball;
+# $CARGO_HOME/bin — cargo install; HOVERCLOCK_BIN_DIR override) plus every
+# directory on PATH. Each found binary is stashed and restored to its
+# exact original path by ./scripts/swap-to-prod.sh.
+#
+# cargo note: while the binary is stashed, `cargo uninstall hover-clock`
+# cannot find it — swap back to production first.
 
 set -euo pipefail
 
@@ -50,18 +55,23 @@ fi
 mkdir -p "$STASH_DIR"
 printf 'service=%s\nautostart=%s\n' "$service" "$autostart" > "$STATE_FILE"
 
-# Known install locations, plus any other hover-clock on PATH.
+# Discovery, not presumption: known locations + HOVERCLOCK_BIN_DIR override
+# + every directory on PATH.
 candidates=()
-for p in "$HOME/.local/bin/hover-clock" "$HOME/.cargo/bin/hover-clock"; do
-    [ -f "$p" ] && candidates+=("$p")
+add_candidate() {
+    for c in "${candidates[@]}"; do
+        [ "$c" = "$1" ] && return
+    done
+    candidates+=("$1")
+}
+for p in "${HOVERCLOCK_BIN_DIR:-$HOME/.local/bin}/hover-clock" "${CARGO_HOME:-$HOME/.cargo}/bin/hover-clock"; do
+    [ -f "$p" ] && add_candidate "$p"
 done
-other="$(command -v hover-clock 2>/dev/null || true)"
-if [ -n "$other" ]; then
-    case " ${candidates[*]} " in
-        *" $other "*) ;;
-        *) candidates+=("$other") ;;
-    esac
-fi
+IFS=':' read -ra dirs <<< "$PATH"
+for dir in "${dirs[@]}"; do
+    [ -n "$dir" ] || continue
+    [ -f "$dir/hover-clock" ] && add_candidate "$dir/hover-clock"
+done
 
 i=0
 for bin in "${candidates[@]}"; do

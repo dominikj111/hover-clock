@@ -1,0 +1,72 @@
+name: Release
+
+# Publishing is main-only: pushing a tag like v0.1.0 (created on main)
+# builds release binaries for x86_64 and aarch64 and uploads tarballs +
+# checksums to the GitHub release page for that tag. The guard job rejects
+# tags that do not point at main or whose version does not match
+# Cargo.toml (single source of truth).
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tag must point at main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Release tag $GITHUB_REF_NAME is not on main's history — publishing is main-only (dev tags are rejected)."
+            exit 1
+          fi
+      - name: Tag version must match Cargo.toml
+        run: |
+          tag_ver="${GITHUB_REF_NAME#v}"
+          cargo_ver="$(grep -m1 '^version' Cargo.toml | sed 's/.*= *"\(.*\)"/\1/')"
+          if [ "$tag_ver" != "$cargo_ver" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match Cargo.toml version $cargo_ver — bump Cargo.toml first."
+            exit 1
+          fi
+
+  build:
+    needs: guard
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.arch }}
+      - name: Install GTK4 build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libgtk-4-dev
+      - name: Build release
+        run: cargo build --release --locked
+      - name: Package tarball + checksum
+        run: |
+          mkdir -p dist
+          name="hover-clock-${GITHUB_REF_NAME}-${{ matrix.arch }}"
+          tar czf "dist/${name}.tar.gz" -C target/release hover-clock
+          sha256sum "dist/${name}.tar.gz" > "dist/${name}.tar.gz.sha256"
+      - name: Upload to release page
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

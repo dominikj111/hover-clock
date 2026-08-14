@@ -24,18 +24,24 @@ echo "==> Removing registration and binaries"
 rm -f "$UNIT_DIR/hover-clock.service"
 rm -f "$AUTOSTART_DIR/hover-clock.desktop"
 rm -f "$BIN_DIR/hover-clock"
-rm -f "$HOME/.cargo/bin/hover-clock"
+rm -f "${CARGO_HOME:-$HOME/.cargo}/bin/hover-clock"
 
 # Any other hover-clock on PATH that is user-writable (e.g. a GitHub
-# release tarball extracted elsewhere).
-other="$(command -v hover-clock 2>/dev/null || true)"
-if [ -n "$other" ] && [ "$other" != "$BIN_DIR/hover-clock" ] && [ "$other" != "$HOME/.cargo/bin/hover-clock" ]; then
-    if [ -w "$(dirname "$other")" ]; then
-        rm -f "$other"
+# release tarball extracted elsewhere). Discovery, not presumption.
+IFS=':' read -ra dirs <<< "$PATH"
+for dir in "${dirs[@]}"; do
+    [ -n "$dir" ] || continue
+    p="$dir/hover-clock"
+    [ -f "$p" ] || continue
+    case "$p" in
+        "$BIN_DIR/hover-clock" | "${CARGO_HOME:-$HOME/.cargo}/bin/hover-clock") continue ;;
+    esac
+    if [ -w "$dir" ]; then
+        rm -f "$p"
     else
-        echo "!! not removed: $other (directory not writable — remove manually)"
+        echo "!! not removed: $p (directory not writable — remove manually)"
     fi
-fi
+done
 
 rm -rf "$STATE_DIR"
 systemctl --user daemon-reload 2>/dev/null || true
