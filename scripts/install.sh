@@ -18,6 +18,14 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN_DIR="${HOVERCLOCK_BIN_DIR:-$HOME/.local/bin}"
 BINARY="$BIN_DIR/hover-clock"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/hover-clock"
+LOG_FILE="$STATE_DIR/install.log"
+
+# Audit log: one timestamped line per action (removed by uninstall).
+log() {
+    mkdir -p "$STATE_DIR"
+    printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG_FILE"
+}
 
 cd "$REPO_ROOT"
 
@@ -29,6 +37,7 @@ mkdir -p "$BIN_DIR"
 install -m 755 target/release/hover-clock "$BINARY"
 
 if [ "$(ps -p 1 -o comm= 2>/dev/null)" = "systemd" ]; then
+    MECH=systemd
     UNIT_DIR="$HOME/.config/systemd/user"
     echo "==> Installing systemd user unit"
     mkdir -p "$UNIT_DIR"
@@ -45,6 +54,7 @@ if [ "$(ps -p 1 -o comm= 2>/dev/null)" = "systemd" ]; then
     echo "  stop     systemctl --user stop hover-clock"
     echo "  start    systemctl --user start hover-clock"
 else
+    MECH=xdg-autostart
     AUTOSTART_DIR="$HOME/.config/autostart"
     echo "==> Non-systemd init detected; installing XDG autostart entry"
     mkdir -p "$AUTOSTART_DIR"
@@ -57,6 +67,10 @@ else
     echo "  note       starts at next login; to run now: $BINARY"
 fi
 
+version="$(grep -m1 '^version' Cargo.toml | sed 's/.*= *"\(.*\)"/\1/')"
+sha="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+log "install v$version ($sha) -> $BINARY [$MECH]"
+
 echo
 if [ "$(ps -p 1 -o comm= 2>/dev/null)" = "systemd" ]; then
     echo "Dev mode: ./scripts/swap-to-dev.sh (stops daemon, stashes the installed binary,"
@@ -65,3 +79,5 @@ else
     echo "Dev mode: ./scripts/swap-to-dev.sh (stashes the installed binary, then cargo run);"
     echo "return with ./scripts/swap-to-prod.sh."
 fi
+
+echo "Audit log: $LOG_FILE (one line per install/upgrade/swap run)"

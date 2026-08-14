@@ -14,8 +14,15 @@ set -euo pipefail
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/hover-clock"
 STASH_DIR="$STATE_DIR/prod-bin"
 STATE_FILE="$STATE_DIR/state"
+LOG_FILE="$STATE_DIR/install.log"
 UNIT_DIR="$HOME/.config/systemd/user"
 AUTOSTART_DIR="$HOME/.config/autostart"
+
+# Audit log: one timestamped line per action (removed by uninstall).
+log() {
+    mkdir -p "$STATE_DIR"
+    printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG_FILE"
+}
 
 if [ ! -f "$STATE_FILE" ]; then
     echo "No saved production install found (swap state is empty)."
@@ -29,6 +36,7 @@ pkill -x hover-clock 2>/dev/null || true
 
 service=0
 autostart=0
+restored=0
 while IFS= read -r line; do
     case "$line" in
         service=*)
@@ -59,6 +67,7 @@ while IFS= read -r line; do
                     echo "==> Restoring $orig"
                     mkdir -p "$(dirname "$orig")"
                     mv -f "$stash" "$orig"
+                    restored=$((restored + 1))
                 else
                     echo "!! cannot restore $orig (directory not writable — restore manually)"
                 fi
@@ -88,4 +97,5 @@ else
     echo "==> No daemon registration found; run ./scripts/install.sh to register"
 fi
 
+log "swap-to-prod: restored $restored production binary(ies) [service=$service autostart=$autostart]"
 echo "Back to production."

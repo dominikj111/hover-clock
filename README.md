@@ -128,6 +128,14 @@ desktop session, not the init:
   regardless of init. Trade-offs: no crash-restart, and upgrading a *running* daemon
   needs a session restart until the socket control plane (M5) lands.
 
+### Logs
+
+- **Script audit trail** — every `install.sh` / `upgrade.sh` / swap / uninstall run appends
+  a timestamped line (action, version, git sha, outcome) to
+  `~/.local/state/hover-clock/install.log` (removed by uninstall).
+- **Daemon runtime output** — `journalctl --user -u hover-clock --no-pager -n 50` (or
+  `-b` for the last boot).
+
 ### Dev workflow
 
 `cargo run` starts a second instance, which would fight the daemon over the same X grabs

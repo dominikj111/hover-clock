@@ -15,6 +15,14 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BRANCH="${1:-$(git -C "$REPO_ROOT" symbolic-ref --short HEAD 2>/dev/null || echo main)}"
 BIN_DIR="${HOVERCLOCK_BIN_DIR:-$HOME/.local/bin}"
 BINARY="$BIN_DIR/hover-clock"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/hover-clock"
+LOG_FILE="$STATE_DIR/install.log"
+
+# Audit log: one timestamped line per action (removed by uninstall).
+log() {
+    mkdir -p "$STATE_DIR"
+    printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG_FILE"
+}
 
 cd "$REPO_ROOT"
 
@@ -30,15 +38,22 @@ echo "==> Installing binary to $BIN_DIR"
 mkdir -p "$BIN_DIR"
 install -m 755 target/release/hover-clock "$BINARY"
 
+outcome="daemon not running"
 if systemctl --user is-active --quiet hover-clock.service 2>/dev/null; then
     echo "==> Restarting the daemon"
     systemctl --user restart hover-clock.service
+    outcome="daemon restarted (systemd)"
 elif pgrep -x hover-clock >/dev/null 2>&1; then
     echo "==> Restarting the daemon (autostart instance)"
     pkill -x hover-clock
     echo "    starts again at next login; run it now with: $BINARY"
+    outcome="autostart instance stopped (starts at next login)"
 else
     echo "==> Daemon is not running; start it with: systemctl --user start hover-clock"
 fi
+
+version="$(grep -m1 '^version' Cargo.toml | sed 's/.*= *"\(.*\)"/\1/')"
+sha="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+log "upgrade v$version ($sha) -> $BINARY: $outcome"
 
 echo "Upgrade complete."

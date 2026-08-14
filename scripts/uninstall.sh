@@ -15,6 +15,13 @@ BIN_DIR="${HOVERCLOCK_BIN_DIR:-$HOME/.local/bin}"
 UNIT_DIR="$HOME/.config/systemd/user"
 AUTOSTART_DIR="$HOME/.config/autostart"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/hover-clock"
+LOG_FILE="$STATE_DIR/install.log"
+
+# Audit log: one timestamped line per action (removed by uninstall).
+log() {
+    mkdir -p "$STATE_DIR"
+    printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG_FILE"
+}
 
 echo "==> Stopping and disabling the daemon"
 systemctl --user disable --now hover-clock.service 2>/dev/null || true
@@ -43,6 +50,7 @@ for dir in "${dirs[@]}"; do
     fi
 done
 
+log "uninstall: removed unit/autostart entries, binaries, swap stash"
 rm -rf "$STATE_DIR"
 systemctl --user daemon-reload 2>/dev/null || true
 

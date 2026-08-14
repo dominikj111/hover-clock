@@ -29,8 +29,15 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/hover-clock"
 STASH_DIR="$STATE_DIR/prod-bin"
 STATE_FILE="$STATE_DIR/state"
+LOG_FILE="$STATE_DIR/install.log"
 UNIT_DIR="$HOME/.config/systemd/user"
 AUTOSTART_DIR="$HOME/.config/autostart"
+
+# Audit log: one timestamped line per action (removed by uninstall).
+log() {
+    mkdir -p "$STATE_DIR"
+    printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG_FILE"
+}
 
 cd "$REPO_ROOT"
 
@@ -85,6 +92,8 @@ for bin in "${candidates[@]}"; do
     printf 'bin %s %s\n' "$stash" "$bin" >> "$STATE_FILE"
     i=$((i + 1))
 done
+
+log "swap-to-dev: stashed $i production binary(ies) [service=$service autostart=$autostart]; dev run"
 
 echo
 echo "Dev mode. Running from source:"
