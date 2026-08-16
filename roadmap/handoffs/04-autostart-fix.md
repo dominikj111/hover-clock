@@ -78,6 +78,29 @@ KDE/GNOME testing starts (relevant to S08/M7 and to §17.2):
      (overlay never above native Wayland fullscreen surfaces — GNOME Wayland is
      unreachable for the core requirement per §17.3).
 
+## Script hardening — collision review (follow-up to this fix)
+
+Reviewed all five scripts for cross-script collisions; fixed four issues:
+
+1. **upgrade.sh had no dev guard** (install.sh had one): running it over a dev session
+   would `pkill` the dev instance and install a fresh binary over the stashed one,
+   dangling the swap state. upgrade.sh now refuses identically to install.sh (state
+   file present or a dev `hover-clock` process whose exe differs from the install
+   target).
+2. **swap-to-dev.sh run twice** would overwrite the `state` file and orphan the stashed
+   production binary (swap-to-prod could no longer restore it). It now refuses when the
+   state file already exists.
+3. **No concurrency protection**: all five scripts now take a non-blocking flock on
+   `~/.local/state/hover-clock/lock` and refuse with a clear message if another
+   hover-clock script holds it. swap-to-dev releases the lock before `exec cargo run`,
+   so uninstall can still stop a dev session (documented behavior).
+4. **install.sh guard compared raw paths** — canonicalized via `readlink -f` both sides
+   so a symlinked `BIN_DIR` cannot false-positive as a dev instance.
+
+Verified: `bash -n` on all scripts; lock-contention refusal; state-file refusal across
+install/upgrade/swap-to-dev; full dev round-trip (swap-to-dev → stash + state,
+swap-to-prod → restore + re-enable + daemon active).
+
 ## Observations (not fixed)
 
 1. **`Super + T` grab conflict at one login** (2026-08-16 05:30:10): the daemon logged

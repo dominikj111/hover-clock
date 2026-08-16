@@ -30,6 +30,19 @@ log() {
     printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG_FILE"
 }
 
+# --- serialize state-changing runs ----------------------------------------
+# Refuse when another hover-clock script holds the lock (install/upgrade/
+# swap/uninstall racing on the binary and the swap state would corrupt
+# both). Non-blocking: a clear message beats a silent wait.
+LOCK_FILE="$STATE_DIR/lock"
+mkdir -p "$STATE_DIR"
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+    echo "!! Another hover-clock script is running (install/upgrade/swap/uninstall)." >&2
+    echo "   Wait for it to finish, then retry." >&2
+    exit 1
+fi
+
 # --- refuse to install over an active dev instance ------------------------
 # Install is an operation on production mode. A dev `cargo run` process
 # executes a binary that is not the install target; swap-to-dev stashes the
@@ -43,9 +56,10 @@ if [ -f "$STATE_DIR/state" ]; then
     exit 1
 fi
 dev_pids=""
+installed="$(readlink -f "$BINARY" 2>/dev/null || echo "$BINARY")"
 for pid in $(pgrep -x hover-clock 2>/dev/null || true); do
     exe="$(readlink -f "/proc/$pid/exe" 2>/dev/null || true)"
-    if [ -n "$exe" ] && [ "$exe" != "$BINARY" ]; then
+    if [ -n "$exe" ] && [ "$exe" != "$installed" ]; then
         dev_pids="$dev_pids $pid"
     fi
 done

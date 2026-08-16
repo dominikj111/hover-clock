@@ -39,6 +39,27 @@ log() {
     printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG_FILE"
 }
 
+# --- serialize state-changing runs ----------------------------------------
+LOCK_FILE="$STATE_DIR/lock"
+mkdir -p "$STATE_DIR"
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+    echo "!! Another hover-clock script is running (install/upgrade/swap/uninstall)." >&2
+    echo "   Wait for it to finish, then retry." >&2
+    exit 1
+fi
+
+# --- refuse a second swap-to-dev while dev mode is already active ---------
+# The state file records which production binary is stashed where; rerunning
+# would overwrite it and orphan the stash (swap-to-prod could not restore
+# it). Refuse instead.
+if [ -f "$STATE_FILE" ]; then
+    echo "!! Dev mode is already active (swap state exists)." >&2
+    echo "   Return to production with ./scripts/swap-to-prod.sh first," >&2
+    echo "   or stop the running dev session (Ctrl+C) before swapping again." >&2
+    exit 1
+fi
+
 cd "$REPO_ROOT"
 
 # --- 1. stop the installed daemon -----------------------------------------
@@ -96,5 +117,8 @@ done
 log "swap-to-dev: stashed $i production binary(ies) [service=$service autostart=$autostart]; dev run"
 
 echo
+# Release the state lock before handing control to the dev session, so other
+# scripts (e.g. uninstall) can still run while dev is active.
+flock -u 9
 echo "Dev mode. Running from source:"
 exec cargo run -- "$@"

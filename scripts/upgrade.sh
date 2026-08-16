@@ -24,6 +24,43 @@ log() {
     printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG_FILE"
 }
 
+# --- serialize state-changing runs ----------------------------------------
+# Refuse when another hover-clock script holds the lock.
+LOCK_FILE="$STATE_DIR/lock"
+mkdir -p "$STATE_DIR"
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+    echo "!! Another hover-clock script is running (install/upgrade/swap/uninstall)." >&2
+    echo "   Wait for it to finish, then retry." >&2
+    exit 1
+fi
+
+# --- refuse to upgrade over an active dev instance ------------------------
+# Same contract as install.sh: upgrade is an operation on production mode.
+if [ -f "$STATE_DIR/state" ]; then
+    echo "!! Dev mode is active: the production binary is stashed by swap-to-dev.sh." >&2
+    echo "   Run ./scripts/swap-to-prod.sh first (restores the installed binary)," >&2
+    echo "   then re-run this upgrade." >&2
+    exit 1
+fi
+dev_pids=""
+installed="$(readlink -f "$BINARY" 2>/dev/null || echo "$BINARY")"
+for pid in $(pgrep -x hover-clock 2>/dev/null || true); do
+    exe="$(readlink -f "/proc/$pid/exe" 2>/dev/null || true)"
+    if [ -n "$exe" ] && [ "$exe" != "$installed" ]; then
+        dev_pids="$dev_pids $pid"
+    fi
+done
+if [ -n "$dev_pids" ]; then
+    echo "!! A dev instance of hover-clock is running (not the installed daemon):" >&2
+    for pid in $dev_pids; do
+        echo "   PID $pid: $(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)" >&2
+    done
+    echo "   Stop it first (Ctrl+C in the terminal that started it, or 'pkill -x hover-clock')," >&2
+    echo "   or return to production mode with ./scripts/swap-to-prod.sh." >&2
+    exit 1
+fi
+
 cd "$REPO_ROOT"
 
 echo "==> Pulling latest from origin/$BRANCH"

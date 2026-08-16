@@ -24,6 +24,16 @@ log() {
     printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG_FILE"
 }
 
+# --- serialize state-changing runs ----------------------------------------
+LOCK_FILE="$STATE_DIR/lock"
+mkdir -p "$STATE_DIR"
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+    echo "!! Another hover-clock script is running (install/upgrade/swap/uninstall)." >&2
+    echo "   Wait for it to finish, then retry." >&2
+    exit 1
+fi
+
 if [ ! -f "$STATE_FILE" ]; then
     echo "No saved production install found (swap state is empty)."
     echo "Install production with ./scripts/install.sh or download the latest"
