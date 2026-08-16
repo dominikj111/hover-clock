@@ -12,8 +12,9 @@
 #
 # Usage: ./scripts/install.sh
 #
-# Stop any `cargo run` dev instance first, or use ./scripts/swap-to-dev.sh
-# (it handles stopping the daemon and stashing the installed binary).
+# Refuses to run while a dev instance is active: a `cargo run` process, or
+# a swap-to-dev stash (production binary set aside). Return to production
+# mode with ./scripts/swap-to-prod.sh first (or stop the dev instance).
 
 set -euo pipefail
 
@@ -28,6 +29,35 @@ log() {
     mkdir -p "$STATE_DIR"
     printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG_FILE"
 }
+
+# --- refuse to install over an active dev instance ------------------------
+# Install is an operation on production mode. A dev `cargo run` process
+# executes a binary that is not the install target; swap-to-dev stashes the
+# production binary and records the stash state. Either way, installing now
+# would leave the dev process running a stale binary and the swap state
+# dangling.
+if [ -f "$STATE_DIR/state" ]; then
+    echo "!! Dev mode is active: the production binary is stashed by swap-to-dev.sh." >&2
+    echo "   Run ./scripts/swap-to-prod.sh first (restores the installed binary),">&2
+    echo "   then re-run this install." >&2
+    exit 1
+fi
+dev_pids=""
+for pid in $(pgrep -x hover-clock 2>/dev/null || true); do
+    exe="$(readlink -f "/proc/$pid/exe" 2>/dev/null || true)"
+    if [ -n "$exe" ] && [ "$exe" != "$BINARY" ]; then
+        dev_pids="$dev_pids $pid"
+    fi
+done
+if [ -n "$dev_pids" ]; then
+    echo "!! A dev instance of hover-clock is running (not the installed daemon):" >&2
+    for pid in $dev_pids; do
+        echo "   PID $pid: $(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)" >&2
+    done
+    echo "   Stop it first (Ctrl+C in the terminal that started it, or 'pkill -x hover-clock')," >&2
+    echo "   or return to production mode with ./scripts/swap-to-prod.sh." >&2
+    exit 1
+fi
 
 cd "$REPO_ROOT"
 
