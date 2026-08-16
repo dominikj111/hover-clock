@@ -12,7 +12,9 @@ flashes in the taskbar (GDK skip-taskbar hints, fix on M1/M2), stays invisible t
 switchers, and auto-hides (debounced) on corner leave. **S04 (M3 — Presentation)** in progress:
 clock widget (time/day/date, §11), static single style (rounded corners, translucent black,
 §8.3), `decorated(false)` and corner-leave auto-hide landed; fade in/out transitions and
-trigger-corner placement remain.
+trigger-corner placement remain. Packaging: daemon autostart fixed for DEs that never raise
+`graphical-session.target` (xfce on MX Linux — unit now wanted by `default.target` too); see
+[handoffs/04-autostart-fix.md](handoffs/04-autostart-fix.md).
 
 ## Story cards
 

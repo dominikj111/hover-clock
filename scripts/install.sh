@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Install HoverClock as a session daemon. Detects the active init:
 #   systemd -> systemd *user* service (~/.config/systemd/user), auto-start
-#              at login via graphical-session.target
+#              at login via default.target (every systemd user session)
+#              and graphical-session.target (GNOME/KDE); xfce-style
+#              sessions never raise the latter — default.target covers them
 #   other   -> XDG autostart entry (~/.config/autostart), honored by
 #              Xfce/GNOME/KDE sessions — the correct mechanism for
 #              sysvinit/OpenRC/runit systems (MX with sysvinit boot,

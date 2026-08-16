@@ -406,6 +406,20 @@ decisions explicit; macOS/Windows are *ports behind the facade contracts* (§10)
 Workspace tracking (§17.3, X11) degrades to a logged warning on WMs that do not
 advertise `_NET_CURRENT_DESKTOP` — by design, never a crash.
 
+**Session autostart (systemd user unit) — DE behavior differs at login:**
+GNOME (`gnome-session`) and KDE Plasma raise `graphical-session.target` when the
+session is ready; **xfce/XFCE-style sessions (MX Linux, Xfce, likely LXQt/MATE)
+never raise it** — the user session goes straight to `default.target` (verified on
+MX Linux 23/xfce; `journalctl --user -u graphical-session.target` stays empty while
+the manager reaches `default.target` at login). The unit is therefore
+`WantedBy=default.target graphical-session.target` (with
+`After=default.target graphical-session.target`, `PartOf=graphical-session.target`):
+the first raised target pulls the daemon in, the second finds it already active —
+exactly one start on every DE. `DISPLAY`/`XAUTHORITY` reach the user manager at
+login via `pam_systemd` (GDM/lightdm/SDDM all do this), so the daemon connects at
+`default.target` without hardcoding a display. See
+`roadmap/handoffs/04-autostart-fix.md`.
+
 ### 17.3 Wayland
 
 - **Current build under XWayland (any Wayland session):** activation works (XWayland

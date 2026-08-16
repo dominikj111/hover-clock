@@ -1,13 +1,20 @@
 # systemd *user* unit — HoverClock runs in the graphical session as the
-# logged-in user (needs X11 access; never root). Auto-starts with the
-# session via graphical-session.target, which Xfce/GNOME/KDE raise under
-# systemd. Stop/start with:
+# logged-in user (needs X11 access; never root).
+#
+# Wanted by *both* default.target and graphical-session.target, because
+# which target a desktop raises at login differs:
+#   - GNOME/KDE raise graphical-session.target when the session is ready
+#   - xfce/XFCE-style sessions (e.g. MX Linux) never raise it — the user
+#     session goes straight to default.target
+# With both WantedBy entries the daemon starts exactly once either way
+# (the first target that raises pulls it in; the second finds it active).
+# Stop/start with:
 #   systemctl --user stop hover-clock
 #   systemctl --user start hover-clock
 
 [Unit]
 Description=HoverClock — transient overlay daemon (clock on demand)
-After=graphical-session.target
+After=default.target graphical-session.target
 PartOf=graphical-session.target
 
 [Service]
@@ -15,8 +22,9 @@ Type=simple
 ExecStart=%h/.local/bin/hover-clock
 Restart=on-failure
 RestartSec=3
-# Only needed if your desktop does not raise graphical-session.target:
-# Environment=DISPLAY=:0
+# Only needed if DISPLAY/XAUTHORITY are not in the user manager
+# environment at login (console login + manual startx):
+# Environment=DISPLAY=:0 XAUTHORITY=%h/.Xauthority
 
 [Install]
-WantedBy=graphical-session.target
+WantedBy=default.target graphical-session.target
