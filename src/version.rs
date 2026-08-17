@@ -54,10 +54,20 @@ pub fn current_label() -> String {
     format!("v{}", running_version())
 }
 
-/// The latest published release of this repository, if it can be
-/// determined. `None` on any failure — offline, rate-limited, timeouts,
-/// malformed response — and callers degrade gracefully.
-pub fn latest_release() -> Option<Version> {
+/// A published release, with the assets the self-update needs (roadmap
+/// S09): the tarball for the current architecture and its checksum file.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Release {
+    pub version: Version,
+    pub tarball_url: String,
+    pub sha256_url: String,
+}
+
+/// The latest published release of this repository, with the current
+/// architecture's assets, if it can be determined. `None` on any failure
+/// — offline, rate-limited, timeouts, malformed response — and callers
+/// degrade gracefully.
+pub fn latest_release() -> Option<Release> {
     let agent = ureq::AgentBuilder::new()
         .timeout_connect(HTTP_TIMEOUT)
         .timeout_read(HTTP_TIMEOUT)
@@ -73,7 +83,31 @@ pub fn latest_release() -> Option<Version> {
         .ok()?
         .into_string()
         .ok()?;
-    tag_version(&body)
+    release_from_json(&body)
+}
+
+/// Parse a release + asset URLs from the `releases/latest` JSON.
+fn release_from_json(body: &str) -> Option<Release> {
+    let version = tag_version(body)?;
+    let arch = std::env::consts::ARCH; // matches the release asset names
+    let tarball = format!("hover-clock-v{version}-{arch}.tar.gz");
+    Some(Release {
+        version,
+        tarball_url: asset_url(body, &tarball)?,
+        sha256_url: asset_url(body, &format!("{tarball}.sha256"))?,
+    })
+}
+
+/// Find the `browser_download_url` of the asset with the given `name` in
+/// the releases JSON (lightweight — no JSON parser needed for one field
+/// pairing; the API shape is stable).
+fn asset_url(body: &str, name: &str) -> Option<String> {
+    let key = format!("\"name\":\"{name}\"");
+    let start = body.find(&key)?;
+    let url_key = "\"browser_download_url\":\"";
+    let url_start = body[start..].find(url_key)? + start + url_key.len();
+    let url_end = body[url_start..].find('"')? + url_start;
+    Some(body[url_start..url_end].to_string())
 }
 
 /// GitHub Releases API URL derived from the repository URL in Cargo.toml
@@ -157,6 +191,31 @@ mod tests {
         );
         assert_eq!(tag_version("{}"), None);
         assert_eq!(tag_version(""), None);
+    }
+
+    #[test]
+    fn parses_release_with_arch_assets() {
+        let arch = std::env::consts::ARCH;
+        let body = format!(
+            r#"{{"tag_name":"v1.1.0","assets":[
+                {{"name":"hover-clock-v1.1.0-{arch}.tar.gz","browser_download_url":"https://github.com/dominikj111/hover-clock/releases/download/v1.1.0/hover-clock-v1.1.0-{arch}.tar.gz"}},
+                {{"name":"hover-clock-v1.1.0-{arch}.tar.gz.sha256","browser_download_url":"https://github.com/dominikj111/hover-clock/releases/download/v1.1.0/hover-clock-v1.1.0-{arch}.tar.gz.sha256"}}
+            ]}}"#
+        );
+        let release = release_from_json(&body).expect("parses");
+        assert_eq!(release.version, Version::parse("1.1.0").unwrap());
+        assert!(
+            release.tarball_url.ends_with(&format!("hover-clock-v1.1.0-{arch}.tar.gz")),
+            "got {}",
+            release.tarball_url
+        );
+        assert!(release.sha256_url.ends_with(".sha256"));
+        // A release missing the current arch's assets is not updatable.
+        let other_arch = if arch == "x86_64" { "aarch64" } else { "x86_64" };
+        let other = format!(
+            r#"{{"tag_name":"v1.1.0","assets":[{{"name":"hover-clock-v1.1.0-{other_arch}.tar.gz","browser_download_url":"u"}}]}}"#
+        );
+        assert_eq!(release_from_json(&other), None);
     }
 
     #[test]

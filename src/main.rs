@@ -1,5 +1,6 @@
 mod backend;
 mod ipc;
+mod update;
 mod version;
 
 use std::cell::RefCell;
@@ -58,9 +59,11 @@ struct ClockWidget {
     time: gtk::Label,
     day: gtk::Label,
     date: gtk::Label,
-    /// Version label — updated asynchronously once the GitHub release
-    /// check (src/version.rs) has an answer.
-    version: gtk::Label,
+    /// The plain label, or a click-to-update button when a newer release
+    /// is available (S09) — which one is visible is driven by the GitHub
+    /// release check via `VersionUi` (thread-local).
+    version_label: gtk::Label,
+    version_button: gtk::Button,
 }
 
 impl ClockWidget {
@@ -75,14 +78,21 @@ impl ClockWidget {
         day.add_css_class("clock-day");
         let date = gtk::Label::new(None);
         date.add_css_class("clock-date");
-        let version = gtk::Label::new(None);
-        version.add_css_class("clock-version");
+        let version_area = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        version_area.add_css_class("clock-version-area");
+        let version_label = gtk::Label::new(None);
+        version_label.add_css_class("clock-version");
         // Shows the running version immediately; the GitHub release check
-        // (version::run_check) appends the newer version and the orange
-        // `outdated` class when one exists.
-        version.set_text(&version::current_label());
+        // (version::latest_release) swaps in the button with the newer
+        // version when one exists.
+        version_label.set_text(&version::current_label());
+        let version_button = gtk::Button::new();
+        version_button.add_css_class("clock-version-button");
+        version_button.set_visible(false);
+        version_area.append(&version_label);
+        version_area.append(&version_button);
 
-        for label in [&time, &day, &date, &version] {
+        for label in [&time, &day, &date, &version_label] {
             label.set_halign(gtk::Align::Center);
         }
 
@@ -91,7 +101,7 @@ impl ClockWidget {
         root.append(&time);
         root.append(&day);
         root.append(&date);
-        root.append(&version);
+        root.append(&version_area);
 
         // The frame paints the black margin strip; its 2px padding sits
         // between the window edge and the white border (which lives on
@@ -105,7 +115,8 @@ impl ClockWidget {
             time,
             day,
             date,
-            version,
+            version_label,
+            version_button,
         };
         widget.update();
         (frame, widget)
@@ -232,7 +243,12 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
     // GitHub release check (proposal §11.2, S09): now, then hourly. The
     // HTTP runs on a worker thread; the label is updated on the main
     // loop — offline/failed checks leave it as-is.
-    VERSION_LABEL.with(|label| *label.borrow_mut() = Some(clock.version.clone()));
+    VERSION_UI.with(|ui| {
+        *ui.borrow_mut() = Some(VersionUi::new(
+            clock.version_label.clone(),
+            clock.version_button.clone(),
+        ));
+    });
     run_version_check();
     let refresh = move || {
         run_version_check();
@@ -451,34 +467,107 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
     glib::timeout_add_seconds_local(1, tick);
 }
 
-// Main-thread handle to the version label. The release-check worker
-// thread cannot touch the label (GTK widgets are not Send), so it
-// dispatches the result back via `MainContext::invoke` and this
-// thread-local is where the label lives for the main loop.
+// Main-thread handle to the version UI (label ↔ update button, S09).
+// The release-check and update worker threads cannot touch GTK widgets
+// (not Send), so results are dispatched back via `MainContext::invoke`
+// and the widgets live here, on the main loop.
 thread_local! {
-    static VERSION_LABEL: RefCell<Option<gtk::Label>> = const { RefCell::new(None) };
+    static VERSION_UI: RefCell<Option<VersionUi>> = const { RefCell::new(None) };
+}
+
+/// The version row under the clock: a plain label normally, a
+/// click-to-update button when a newer release is available.
+struct VersionUi {
+    label: gtk::Label,
+    button: gtk::Button,
+    /// The pending release the button would install (set when orange).
+    release: RefCell<Option<version::Release>>,
+}
+
+impl VersionUi {
+    fn new(label: gtk::Label, button: gtk::Button) -> Self {
+        let ui = Self {
+            label,
+            button,
+            release: RefCell::new(None),
+        };
+        // The click handler reads the pending release from the
+        // thread-local and runs the self-update on a worker thread.
+        ui.button.connect_clicked(|button| {
+            VERSION_UI.with(|ui| {
+                let ui = ui.borrow();
+                let Some(ui) = ui.as_ref() else {
+                    return;
+                };
+                let Some(release) = ui.release.borrow().clone() else {
+                    return;
+                };
+                button.set_label("updating…");
+                button.set_sensitive(false);
+                let current = version::running_version();
+                std::thread::spawn(move || {
+                    let result = update::run(&release);
+                    glib::MainContext::default().invoke(move || {
+                        VERSION_UI.with(|ui| {
+                            let ui = ui.borrow();
+                            let Some(ui) = ui.as_ref() else {
+                                return;
+                            };
+                            match result {
+                                // The daemon is restarting (systemd) or
+                                // exiting (re-exec fallback); nothing to
+                                // restore.
+                                Ok(_) => {}
+                                Err(err) => {
+                                    glib::g_warning!("hover-clock", "auto-update failed: {err}");
+                                    // Restore the orange button so the
+                                    // click can be retried.
+                                    let (text, _) =
+                                        version::label_text(current, Some(release.version));
+                                    ui.button.set_label(&text);
+                                    ui.button.set_sensitive(true);
+                                }
+                            }
+                        });
+                    });
+                });
+            });
+        });
+        ui
+    }
+
+    /// Apply a check result: the plain label with the running version,
+    /// or the update button when a newer release exists.
+    fn show_version(&self, text: &str, outdated: bool, release: Option<version::Release>) {
+        *self.release.borrow_mut() = release;
+        if outdated {
+            self.label.set_visible(false);
+            self.button.set_visible(true);
+            self.button.set_label(text);
+        } else {
+            self.button.set_visible(false);
+            self.label.set_visible(true);
+            self.label.set_text(text);
+        }
+    }
 }
 
 /// One version check: fetch the latest GitHub release on a worker thread
-/// (blocking HTTP with timeouts) and apply the result to the label on
-/// the main loop. Failed checks degrade to the current label — never an
-/// error.
+/// (blocking HTTP with timeouts) and apply the result to the version UI
+/// on the main loop. Failed checks degrade to the current label — never
+/// an error.
 fn run_version_check() {
     let current = version::running_version();
     std::thread::spawn(move || {
         let latest = version::latest_release();
-        let (text, outdated) = version::label_text(current, latest);
-        // Send closure (text + flag only); runs on the main loop, where
-        // the non-Send label is reachable via the thread-local.
+        let (text, outdated) = version::label_text(current, latest.as_ref().map(|r| r.version));
+        // Send closure (text + flag + release); runs on the main loop,
+        // where the non-Send widgets are reachable via the thread-local.
         glib::MainContext::default().invoke(move || {
-            VERSION_LABEL.with(|label| {
-                if let Some(label) = label.borrow().as_ref() {
-                    label.set_text(&text);
-                    if outdated {
-                        label.add_css_class("outdated");
-                    } else {
-                        label.remove_css_class("outdated");
-                    }
+            VERSION_UI.with(|ui| {
+                let ui = ui.borrow();
+                if let Some(ui) = ui.as_ref() {
+                    ui.show_version(&text, outdated, latest);
                 }
             });
         });

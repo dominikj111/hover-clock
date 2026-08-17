@@ -55,12 +55,28 @@ window.background {
 /* Version label: shadow-grey by default — dimmer than the time but
  * clearly visible; orange when a newer version is available in the local
  * repository (src/version.rs). */
+/* Version row: a plain label, or a click-to-update button in orange
+ * when a newer release is available (src/version.rs, S09). */
+.clock-version-area {
+    margin-top: 8px;
+}
+
 .clock-version {
     font-size: 11px;
-    margin-top: 8px;
     color: rgba(55, 70, 80, 1);
 }
 
-.clock-version.outdated {
+.clock-version-button {
+    font-size: 11px;
     color: #ff9800;
+    background: none;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    min-height: 0;
+}
+
+.clock-version-button:hover {
+    color: #ffb74d;
+    text-decoration: underline;
 }

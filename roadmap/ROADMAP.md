@@ -13,9 +13,9 @@ switchers, and auto-hides (debounced) on corner leave. **S04 (M3 — Presentatio
 clock widget (time/day/date, §11), static single style (rounded corners, translucent black,
 §8.3), `decorated(false)`, corner-leave auto-hide, and the daemon/client CLI split (§7.4) —
 `--start`/`-s` starts the single-instance daemon, no-arg invocations are clients
-sending `show` over the Unix control socket — landed, plus the version label checking the
-GitHub releases API hourly (offline → current colour, §11.2/S09); fade in/out transitions
-and trigger-corner placement remain. Packaging: daemon autostart fixed for DEs that never raise
+sending `show` over the Unix control socket — landed, plus the version row (GitHub release
+check + click-to-update button, §11.2/S09) and the M3 presentation finish: fade in/out
+transitions and trigger-corner placement. S04/S09 pending only the live X-session smoke. Packaging: daemon autostart fixed for DEs that never raise
 `graphical-session.target` (xfce on MX Linux — unit now wanted by `default.target` too); see
 [handoffs/04-autostart-fix.md](handoffs/04-autostart-fix.md).
 
@@ -125,14 +125,16 @@ and trigger-corner placement remain. Packaging: daemon autostart fixed for DEs t
 
 ### S09 — Version notification widget 🟡
 
-- **Status:** 🔄 in progress — GitHub release check **landed** (label turns orange when
-  newer; hourly refresh, offline → current colour, §11.2, `src/version.rs`); **remaining:**
-  the non-intrusive widget + click-to-upgrade action.
+- **Status:** 🔄 in progress — check + **click-to-update landed** (the orange label becomes
+  a button; clicking downloads the release tarball for the arch, verifies SHA-256, replaces
+  the binary atomically and restarts via systemd / re-exec fallback, `src/update.rs`).
+  Pending: live smoke (click upgrade on the X session).
 - **Goal:** When a newer release exists, the overlay shows a small non-intrusive widget
   (e.g. under the clock) — click to upgrade.
 - **Deliverables:** ~~version check against the GitHub releases API with offline-first
-  degradation~~ (done); click-to-upgrade action (runs the swap/upgrade flow and restarts the
-  daemon seamlessly); refresh policy (hourly, landed).
+  degradation~~ (done); ~~click-to-upgrade action (downloads the release tarball, verifies
+  the checksum, replaces the binary, restarts the daemon)~~ (done); refresh policy (hourly,
+  landed).
 - **Acceptance:** widget appears only when a newer version is known; offline shows nothing;
   click upgrades and restarts the daemon without disturbing the session.
 - **Design refs:** §2 (widget growth path), §7.4 (data plane, later), §13 (footprint —
