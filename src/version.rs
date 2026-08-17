@@ -205,13 +205,19 @@ mod tests {
         let release = release_from_json(&body).expect("parses");
         assert_eq!(release.version, Version::parse("1.1.0").unwrap());
         assert!(
-            release.tarball_url.ends_with(&format!("hover-clock-v1.1.0-{arch}.tar.gz")),
+            release
+                .tarball_url
+                .ends_with(&format!("hover-clock-v1.1.0-{arch}.tar.gz")),
             "got {}",
             release.tarball_url
         );
         assert!(release.sha256_url.ends_with(".sha256"));
         // A release missing the current arch's assets is not updatable.
-        let other_arch = if arch == "x86_64" { "aarch64" } else { "x86_64" };
+        let other_arch = if arch == "x86_64" {
+            "aarch64"
+        } else {
+            "x86_64"
+        };
         let other = format!(
             r#"{{"tag_name":"v1.1.0","assets":[{{"name":"hover-clock-v1.1.0-{other_arch}.tar.gz","browser_download_url":"u"}}]}}"#
         );

@@ -240,6 +240,13 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
     let (_, natural_height, _, _) = clock_root.measure(gtk::Orientation::Vertical, -1);
     let window_size = (natural_width, natural_height);
 
+    // M3: realize once up front (GTK's own path — `gtk_widget_realize`,
+    // not `gtk_native_realize` directly) so the X surface exists for
+    // corner placement before the first show. Realize ≠ map: the overlay
+    // stays hidden until a trigger fires. The realize signal also applies
+    // the EWMH overlay hints (connect_realize above).
+    gtk::prelude::WidgetExt::realize(&window);
+
     // GitHub release check (proposal §11.2, S09): now, then hourly. The
     // HTTP runs on a worker thread; the label is updated on the main
     // loop — offline/failed checks leave it as-is.
@@ -656,10 +663,9 @@ impl OverlayController {
         } else {
             self.size.0
         };
-        // Realize without mapping so the X surface exists, then request
-        // the position before the window maps — no flash at GTK's default
-        // location. Realize is idempotent.
-        gtk::prelude::NativeExt::realize(self.window.as_ref());
+        // The window was realized at setup, so the X surface already
+        // exists; request the position before the window maps — no flash
+        // at GTK's default location.
         let window: &gtk::Window = self.window.upcast_ref();
         window_backend.move_to(
             window,
