@@ -139,9 +139,11 @@ and trigger-corner placement remain. Packaging: daemon autostart fixed for DEs t
   low-frequency check, no polling)
 - **Hand-off:** pending
 
-### S10 — Versioning & release (1.0.0) ⬜
+### S10 — Versioning & release (1.0.0) ✅ 2026-08-17
 
-- **Status:** ⬜ next focus
+- **Status:** ✅ 2026-08-17 — `v1.0.0` tagged on main, release published (x86_64 +
+  aarch64 tarballs + SHA-256), pipeline verified end-to-end. dev merged into main; the
+  project now works directly on main (stale dev branch to be deleted).
 - **Goal:** Turn the dev-branch work into a numbered, published release: versioning
   convention, main-gated release pipeline live, `v1.0.0` tagged and published, main in sync
   with dev.
@@ -149,15 +151,15 @@ and trigger-corner placement remain. Packaging: daemon autostart fixed for DEs t
   lives on dev (which also carries `release.yml`, currently dev-only). No tags or releases
   exist yet. The interim version label (`src/version.rs`) checks a local `Cargo.toml`;
   S09 replaces it with the GitHub-releases check.
-- **Deliverables:** merge dev → main (brings the main-gated release workflow live); semver
-  policy (Cargo.toml as single source of truth; bump to 1.0.0 for this release); tag
-  `v1.0.0` on main → GitHub release (x86_64 + aarch64 tarballs, existing pipeline);
-  end-to-end upgrade check (`install.sh` → `upgrade.sh` → version label white again).
+- **Deliverables:** ~~merge dev → main~~ (done); semver policy (Cargo.toml as single source
+  of truth; bumped to 1.0.0); ~~tag `v1.0.0` on main → GitHub release~~ (done);
+  ~~end-to-end upgrade check~~ (done).
   History-leak decision: **accepted, left as is** (early AGENTS.md commits reference
   `../llm_profiles/...`; already pushed, low practical risk — no rewrite).
 - **Acceptance:** `v1.0.0` tag on main produces a release; installed daemon shows `v1.0.0`
   (white); main reflects dev's feature set; upgrade path verified end-to-end.
 - **Design refs:** README Releases section, `.github/workflows/release.yml`, S09
+- **Hand-off:** pending
 - **Hand-off:** pending
 
 ## Later (private exploration)
