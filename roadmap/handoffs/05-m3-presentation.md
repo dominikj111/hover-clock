@@ -39,8 +39,10 @@
    GTK4/GDK4 removed programmatic window positioning, so it's an X11 `configure_window`.
    A WM that ignores the requested position degrades to GTK default placement (acceptable;
    xfwm4 honors it).
-3. **Workspace re-map is instant, not faded** — the unmap+map batch must stay imperceptible
-   (§5); only corner/Esc/toggle paths fade.
+3. **Workspace re-map: instant hide, fade-in re-show** — the unmap+map batch stays
+   imperceptible on the hide side; the re-shown overlay fades in (~150 ms, same as corner/
+   Esc/toggle), which reads much smoother than an instant pop. (Originally instant on both
+   sides; the fade-in landed after the story was verified.)
 4. **Widget size for placement** is measured at setup (`widget.measure`, natural size) with
    the allocated size preferred once the window has mapped; version-label text changes can
    shift the width slightly (margin absorbs it).

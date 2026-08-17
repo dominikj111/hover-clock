@@ -396,16 +396,14 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
                     }
                     if pointer_in_hot_area {
                         // Pointer is in the hot area on the new workspace:
-                        // show immediately — the switch re-affirms the
-                        // trigger, no dwell needed. Hide first so the
-                        // window re-maps onto the current workspace (X11
-                        // windows stay on the workspace they were mapped
-                        // on); unmap+map in the same batch is
-                        // imperceptible, so the overlay follows without
-                        // flicker. Instant, not faded: the re-map must
-                        // stay invisible.
+                        // the switch re-affirms the trigger. Hide first so
+                        // the window re-maps onto the current workspace
+                        // (X11 windows stay on the workspace they were
+                        // mapped on), then re-show with a fade-in — the
+                        // re-map stays instant (no gap), the clock fades
+                        // back in instead of popping.
                         controller.hide_instant();
-                        controller.show_instant();
+                        controller.show();
                     } else {
                         // The overlay would otherwise linger on the
                         // workspace the user left.
@@ -704,16 +702,6 @@ impl OverlayController {
         } else {
             self.show();
         }
-    }
-
-    /// Instant show/hide — used by the workspace re-map, which must stay
-    /// imperceptible (no fade, proposal §5).
-    fn show_instant(&self) {
-        self.cancel_fade();
-        self.place();
-        self.window.set_visible(true);
-        self.window.set_opacity(1.0);
-        self.backend.set_overlay_visible(true);
     }
 
     fn hide_instant(&self) {
