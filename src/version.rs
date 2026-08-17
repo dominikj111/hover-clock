@@ -26,7 +26,11 @@ impl Version {
         let major = parts.next()?.parse().ok()?;
         let minor = parts.next()?.parse().ok()?;
         let patch = parts.next()?.parse().ok()?;
-        Some(Self { major, minor, patch })
+        Some(Self {
+            major,
+            minor,
+            patch,
+        })
     }
 }
 
@@ -97,8 +101,22 @@ mod tests {
 
     #[test]
     fn parses_numeric_versions() {
-        assert_eq!(Version::parse("0.1.0"), Some(Version { major: 0, minor: 1, patch: 0 }));
-        assert_eq!(Version::parse("1.20.3"), Some(Version { major: 1, minor: 20, patch: 3 }));
+        assert_eq!(
+            Version::parse("0.1.0"),
+            Some(Version {
+                major: 0,
+                minor: 1,
+                patch: 0
+            })
+        );
+        assert_eq!(
+            Version::parse("1.20.3"),
+            Some(Version {
+                major: 1,
+                minor: 20,
+                patch: 3
+            })
+        );
         assert_eq!(Version::parse("0.1"), None);
         assert_eq!(Version::parse("nope"), None);
         assert_eq!(Version::parse(""), None);
@@ -108,7 +126,10 @@ mod tests {
     fn orders_versions() {
         assert!(Version::parse("0.2.0").unwrap() > Version::parse("0.1.9").unwrap());
         assert!(Version::parse("1.0.0").unwrap() > Version::parse("0.9.9").unwrap());
-        assert_eq!(Version::parse("0.1.0").unwrap(), Version::parse("0.1.0").unwrap());
+        assert_eq!(
+            Version::parse("0.1.0").unwrap(),
+            Version::parse("0.1.0").unwrap()
+        );
     }
 
     #[test]
@@ -116,7 +137,11 @@ mod tests {
         let toml = "[package]\nname = \"hover-clock\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nchrono = \"0.4\"\ngtk = { version = \"0.11.4\", package = \"gtk4\" }\n";
         assert_eq!(
             parse_cargo_version(toml),
-            Some(Version { major: 0, minor: 1, patch: 0 })
+            Some(Version {
+                major: 0,
+                minor: 1,
+                patch: 0
+            })
         );
     }
 

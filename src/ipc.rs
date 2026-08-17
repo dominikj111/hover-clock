@@ -110,7 +110,10 @@ fn bind_daemon_at(path: &Path) -> Result<gio::SocketService, String> {
             if path.exists() {
                 // Stale socket from a crashed daemon: reclaim and retry.
                 std::fs::remove_file(path).map_err(|err| {
-                    format!("cannot reclaim stale control socket {}: {err}", path.display())
+                    format!(
+                        "cannot reclaim stale control socket {}: {err}",
+                        path.display()
+                    )
                 })?;
                 bind().map_err(|err| {
                     format!("cannot bind control socket {}: {err}", path.display())
@@ -155,9 +158,7 @@ where
             let input = gio::DataInputStream::new(&connection.input_stream());
             let output = gio::DataOutputStream::new(&connection.output_stream());
             // EOF (client closed) or read error ends the connection.
-            while let Ok(Some(line)) =
-                input.read_line_utf8_future(glib::Priority::DEFAULT).await
-            {
+            while let Ok(Some(line)) = input.read_line_utf8_future(glib::Priority::DEFAULT).await {
                 let line = line.trim();
                 if line.is_empty() {
                     continue;
