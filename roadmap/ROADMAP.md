@@ -15,7 +15,9 @@ clock widget (time/day/date, §11), static single style (rounded corners, transl
 `--start`/`-s` starts the single-instance daemon, no-arg invocations are clients
 sending `show` over the Unix control socket — landed, plus the version row (GitHub release
 check + click-to-update button, §11.2/S09) and the M3 presentation finish: fade in/out
-transitions and trigger-corner placement. S04/S09 pending only the live X-session smoke. Packaging: daemon autostart fixed for DEs that never raise
+transitions and trigger-corner placement — **S04 and S09 delivered** (hand-offs
+`05-m3-presentation.md`, `06-s09-version-update.md`); release flow live (v1.0.0–v1.2.0,
+`just deploy`). **Next: S05 (M4 Calendar widget)**. Packaging: daemon autostart fixed for DEs that never raise
 `graphical-session.target` (xfce on MX Linux — unit now wanted by `default.target` too); see
 [handoffs/04-autostart-fix.md](handoffs/04-autostart-fix.md).
 
@@ -54,9 +56,11 @@ transitions and trigger-corner placement. S04/S09 pending only the live X-sessio
 - **Design refs:** §5, §10, §13
 - **Hand-off:** [03-m2-activation.md](handoffs/03-m2-activation.md)
 
-### S04 — M3 Presentation 🔄
+### S04 — M3 Presentation ✅ 2026-08-17
 
-- **Status:** 🔄 in progress
+- **Status:** ✅ 2026-08-17 — all deliverables landed and live-verified: fade in/out
+  transitions, trigger-corner placement, daemon/client CLI split (§7.4); hand-off:
+  [handoffs/05-m3-presentation.md](handoffs/05-m3-presentation.md).
 - **Goal:** The clock becomes a widget: time/day/date, CSS styling, fade in/out show/hide
   transitions, auto-hide timer (mouse leaves overlay/corner, debounced).
 - **Deliverables:** full clock widget (§11 layout), CSS theming, fade in/out show/hide
@@ -123,12 +127,11 @@ transitions and trigger-corner placement. S04/S09 pending only the live X-sessio
 - **Design refs:** §10, §15 (layer-shell anchor/layer choice)
 - **Hand-off:** pending
 
-### S09 — Version notification widget 🟡
+### S09 — Version notification widget ✅ 2026-08-17
 
-- **Status:** 🔄 in progress — check + **click-to-update landed** (the orange label becomes
-  a button; clicking downloads the release tarball for the arch, verifies SHA-256, replaces
-  the binary atomically and restarts via systemd / re-exec fallback, `src/update.rs`).
-  Pending: live smoke (click upgrade on the X session).
+- **Status:** ✅ 2026-08-17 — check + click-to-update landed and verified through two real
+  release cycles (self-updated 1.0.0 → 1.1.0 → 1.2.0) and the dev-mode button loop; hand-off:
+  [handoffs/06-s09-version-update.md](handoffs/06-s09-version-update.md).
 - **Goal:** When a newer release exists, the overlay shows a small non-intrusive widget
   (e.g. under the clock) — click to upgrade.
 - **Deliverables:** ~~version check against the GitHub releases API with offline-first
