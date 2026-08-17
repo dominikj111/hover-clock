@@ -69,14 +69,27 @@ window.background {
 .clock-version-button {
     font-size: 11px;
     color: #ff9800;
-    background: none;
-    border: none;
-    box-shadow: none;
-    padding: 0;
+    /* Pill that matches the overlay: same radius as the widget, a
+     * translucent orange tint + border so it reads as actionable — the
+     * plain text (above) is the non-interactive state. */
+    background-color: rgba(255, 152, 0, 0.12);
+    border: 1px solid rgba(255, 152, 0, 0.55);
+    border-radius: 10px;
+    padding: 3px 10px;
     min-height: 0;
+    box-shadow: none;
+    outline: none;
+    transition: 150ms;
+    /* GTK 4.12+; ignored gracefully on older GTK. */
+    cursor: pointer;
 }
 
 .clock-version-button:hover {
+    background-color: rgba(255, 152, 0, 0.28);
     color: #ffb74d;
-    text-decoration: underline;
+    border-color: #ffb74d;
+}
+
+.clock-version-button:disabled {
+    opacity: 0.6;
 }
