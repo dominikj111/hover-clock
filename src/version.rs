@@ -1,18 +1,22 @@
-//! Version label source (interim): the running binary's version vs the
-//! version in a local `Cargo.toml`.
+//! Version label source: the running binary's version vs the latest
+//! published release on GitHub (proposal §11.2; roadmap S09).
 //!
-//! The real update check (against GitHub releases) is future work; until
-//! then the overlay shows whether the repository has moved on from the
-//! binary currently running on the system. The repository is located by
-//! `$HOVERCLOCK_SOURCE_DIR` first, then the working directory and its
-//! ancestors — so dev runs from the repo root work without setup, and an
-//! installed daemon can be pointed at the source explicitly.
+//! The check runs on a worker thread (blocking HTTP with timeouts) and
+//! the result crosses back to the GTK main loop via `MainContext::invoke`
+//! — the UI thread never blocks on network I/O. Failed checks (offline,
+//! rate-limited, malformed response) degrade to "no newer version known":
+//! the label keeps the running version in its current colour, never an
+//! error.
 
-use std::path::PathBuf;
+use std::fmt;
+use std::time::Duration;
 
-/// A numeric `x.y.z` version. Numeric-only by design for the interim
-/// check; full semver (pre-release/build metadata) lands with the real
-/// update check.
+/// Connect/read budget for the release check — bounded so the worker
+/// thread always finishes and the daemon never accumulates stuck checks.
+const HTTP_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// A numeric `x.y.z` version. Numeric-only by design; pre-release/build
+/// metadata is not part of the comparison.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Version {
     major: u32,
@@ -34,63 +38,71 @@ impl Version {
     }
 }
 
-impl std::fmt::Display for Version {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Version {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
     }
 }
 
-/// Parse the `version` of the `[package]` section from `Cargo.toml`
-/// text (dependencies also carry `version =` lines — anchor on the
-/// section, not the first match).
-fn parse_cargo_version(text: &str) -> Option<Version> {
-    let lines: Vec<&str> = text.lines().collect();
-    let package = lines.iter().position(|line| line.trim() == "[package]")?;
-    let line = lines[package..]
-        .iter()
-        .find(|line| line.trim_start().starts_with("version ="))?;
-    let value = line.split('=').nth(1)?.trim().trim_matches('"');
-    Version::parse(value)
+/// The version of this running binary.
+pub fn running_version() -> Version {
+    Version::parse(env!("CARGO_PKG_VERSION")).expect("CARGO_PKG_VERSION is always x.y.z")
 }
 
-/// Locate a local `Cargo.toml`: `$HOVERCLOCK_SOURCE_DIR` override, then
-/// the working directory and up to four ancestors (dev runs start from
-/// the repository root).
-fn find_cargo_toml() -> Option<PathBuf> {
-    if let Some(dir) = std::env::var_os("HOVERCLOCK_SOURCE_DIR") {
-        let candidate = PathBuf::from(dir).join("Cargo.toml");
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-    }
-    let cwd = std::env::current_dir().ok()?;
-    let mut dir = Some(cwd.as_path());
-    for _ in 0..5 {
-        let candidate = dir?.join("Cargo.toml");
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-        dir = dir?.parent();
-    }
-    None
+/// `v<current>` label shown before the network check has an answer.
+pub fn current_label() -> String {
+    format!("v{}", running_version())
 }
 
-/// The version line for the overlay: `v<current>` by default, `v<current>
-/// → v<repo>` when a newer version exists in the local repository. The
+/// The latest published release of this repository, if it can be
+/// determined. `None` on any failure — offline, rate-limited, timeouts,
+/// malformed response — and callers degrade gracefully.
+pub fn latest_release() -> Option<Version> {
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(HTTP_TIMEOUT)
+        .timeout_read(HTTP_TIMEOUT)
+        .build();
+    let body = agent
+        .get(&release_api_url()?)
+        .set(
+            "User-Agent",
+            concat!("hover-clock/", env!("CARGO_PKG_VERSION")),
+        )
+        .set("Accept", "application/vnd.github+json")
+        .call()
+        .ok()?
+        .into_string()
+        .ok()?;
+    tag_version(&body)
+}
+
+/// GitHub Releases API URL derived from the repository URL in Cargo.toml
+/// (`https://github.com/owner/repo` → `https://api.github.com/repos/owner/repo/...`).
+fn release_api_url() -> Option<String> {
+    let path = env!("CARGO_PKG_REPOSITORY").strip_prefix("https://github.com/")?;
+    let (owner, name) = path.split_once('/')?;
+    Some(format!(
+        "https://api.github.com/repos/{owner}/{name}/releases/latest"
+    ))
+}
+
+/// Extract the `tag_name` ("v1.2.3") from the `releases/latest` JSON.
+fn tag_version(body: &str) -> Option<Version> {
+    let key = "\"tag_name\":\"";
+    let start = body.find(key)? + key.len();
+    let end = body[start..].find('"')? + start;
+    let tag = body[start..end]
+        .strip_prefix('v')
+        .unwrap_or(&body[start..end]);
+    Version::parse(tag)
+}
+
+/// Pure label logic, testable without the network: `v<current>` by
+/// default, `v<current> → v<latest>` when a newer release exists. The
 /// boolean is true when the label should warn (orange).
-pub fn version_label() -> (String, bool) {
-    let current = Version::parse(env!("CARGO_PKG_VERSION"))
-        .expect("CARGO_PKG_VERSION is always a valid x.y.z version");
-    let repo = find_cargo_toml()
-        .and_then(|path| std::fs::read_to_string(path).ok())
-        .and_then(|text| parse_cargo_version(&text));
-    status(current, repo)
-}
-
-/// Pure label logic, testable without the filesystem.
-fn status(current: Version, repo: Option<Version>) -> (String, bool) {
-    match repo {
-        Some(repo) if repo > current => (format!("v{current} → v{repo}"), true),
+pub fn label_text(current: Version, latest: Option<Version>) -> (String, bool) {
+    match latest {
+        Some(latest) if latest > current => (format!("v{current} → v{latest}"), true),
         _ => (format!("v{current}"), false),
     }
 }
@@ -133,38 +145,42 @@ mod tests {
     }
 
     #[test]
-    fn parses_package_version_from_cargo_toml() {
-        let toml = "[package]\nname = \"hover-clock\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nchrono = \"0.4\"\ngtk = { version = \"0.11.4\", package = \"gtk4\" }\n";
+    fn parses_tag_name_from_release_json() {
+        let body = r#"{"url":"...","tag_name":"v1.0.0","name":"1.0.0","draft":false}"#;
         assert_eq!(
-            parse_cargo_version(toml),
+            tag_version(body),
             Some(Version {
-                major: 0,
-                minor: 1,
+                major: 1,
+                minor: 0,
                 patch: 0
             })
         );
+        assert_eq!(tag_version("{}"), None);
+        assert_eq!(tag_version(""), None);
     }
 
     #[test]
-    fn ignores_dependency_versions_without_package_section() {
-        let toml = "[dependencies]\nchrono = { version = \"0.4.45\" }\n";
-        assert_eq!(parse_cargo_version(toml), None);
-    }
-
-    #[test]
-    fn label_shows_upgrade_only_when_repo_is_newer() {
-        let current = Version::parse("0.1.0").unwrap();
-        assert_eq!(status(current, None), ("v0.1.0".into(), false));
+    fn derives_release_api_url_from_repository() {
         assert_eq!(
-            status(current, Some(Version::parse("0.1.0").unwrap())),
-            ("v0.1.0".into(), false)
+            release_api_url(),
+            Some("https://api.github.com/repos/dominikj111/hover-clock/releases/latest".into())
         );
-        let newer = status(current, Some(Version::parse("0.2.0").unwrap()));
-        assert_eq!(newer, ("v0.1.0 → v0.2.0".into(), true));
-        // A repo behind the running binary is not an upgrade.
+    }
+
+    #[test]
+    fn label_shows_upgrade_only_when_latest_is_newer() {
+        let current = Version::parse("1.0.0").unwrap();
+        assert_eq!(label_text(current, None), ("v1.0.0".into(), false));
         assert_eq!(
-            status(Version::parse("0.2.0").unwrap(), Some(current)),
-            ("v0.2.0".into(), false)
+            label_text(current, Some(Version::parse("1.0.0").unwrap())),
+            ("v1.0.0".into(), false)
+        );
+        let newer = label_text(current, Some(Version::parse("1.1.0").unwrap()));
+        assert_eq!(newer, ("v1.0.0 → v1.1.0".into(), true));
+        // A release behind the running binary is not an upgrade.
+        assert_eq!(
+            label_text(Version::parse("1.1.0").unwrap(), Some(current)),
+            ("v1.1.0".into(), false)
         );
     }
 }

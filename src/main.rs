@@ -48,6 +48,9 @@ struct ClockWidget {
     time: gtk::Label,
     day: gtk::Label,
     date: gtk::Label,
+    /// Version label — updated asynchronously once the GitHub release
+    /// check (src/version.rs) has an answer.
+    version: gtk::Label,
 }
 
 impl ClockWidget {
@@ -64,17 +67,10 @@ impl ClockWidget {
         date.add_css_class("clock-date");
         let version = gtk::Label::new(None);
         version.add_css_class("clock-version");
-
-        // Interim version check (src/version.rs): the running binary's
-        // version, plus the local repository's when it is newer — then
-        // the label turns orange instead of dirty white. The real check
-        // (GitHub releases) replaces this later. Static: set once, the
-        // widget tree owns the label.
-        let (version_text, outdated) = version::version_label();
-        version.set_text(&version_text);
-        if outdated {
-            version.add_css_class("outdated");
-        }
+        // Shows the running version immediately; the GitHub release check
+        // (version::run_check) appends the newer version and the orange
+        // `outdated` class when one exists.
+        version.set_text(&version::current_label());
 
         for label in [&time, &day, &date, &version] {
             label.set_halign(gtk::Align::Center);
@@ -95,7 +91,12 @@ impl ClockWidget {
         frame.add_css_class("clock-frame");
         frame.append(&root);
 
-        let widget = Self { time, day, date };
+        let widget = Self {
+            time,
+            day,
+            date,
+            version,
+        };
         widget.update();
         (frame, widget)
     }
@@ -210,6 +211,17 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
     // M3: the clock widget (proposal §11) replaces the M0 single label.
     let (clock_root, clock) = ClockWidget::new();
     window.set_child(Some(&clock_root));
+
+    // GitHub release check (proposal §11.2, S09): now, then hourly. The
+    // HTTP runs on a worker thread; the label is updated on the main
+    // loop — offline/failed checks leave it as-is.
+    VERSION_LABEL.with(|label| *label.borrow_mut() = Some(clock.version.clone()));
+    run_version_check();
+    let refresh = move || {
+        run_version_check();
+        glib::ControlFlow::Continue
+    };
+    glib::timeout_add_seconds_local(60 * 60, refresh);
 
     // M1: apply overlay semantics (EWMH hints, non-focusable window type).
     // Configured at realize time — before the window maps — so the window
@@ -414,6 +426,40 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
         glib::ControlFlow::Continue
     };
     glib::timeout_add_seconds_local(1, tick);
+}
+
+// Main-thread handle to the version label. The release-check worker
+// thread cannot touch the label (GTK widgets are not Send), so it
+// dispatches the result back via `MainContext::invoke` and this
+// thread-local is where the label lives for the main loop.
+thread_local! {
+    static VERSION_LABEL: RefCell<Option<gtk::Label>> = const { RefCell::new(None) };
+}
+
+/// One version check: fetch the latest GitHub release on a worker thread
+/// (blocking HTTP with timeouts) and apply the result to the label on
+/// the main loop. Failed checks degrade to the current label — never an
+/// error.
+fn run_version_check() {
+    let current = version::running_version();
+    std::thread::spawn(move || {
+        let latest = version::latest_release();
+        let (text, outdated) = version::label_text(current, latest);
+        // Send closure (text + flag only); runs on the main loop, where
+        // the non-Send label is reachable via the thread-local.
+        glib::MainContext::default().invoke(move || {
+            VERSION_LABEL.with(|label| {
+                if let Some(label) = label.borrow().as_ref() {
+                    label.set_text(&text);
+                    if outdated {
+                        label.add_css_class("outdated");
+                    } else {
+                        label.remove_css_class("outdated");
+                    }
+                }
+            });
+        });
+    });
 }
 
 /// Cancel any pending dwell/auto-hide timers — a trigger or control

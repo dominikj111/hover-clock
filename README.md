@@ -71,10 +71,9 @@ The daemon starts with the overlay hidden. Triggers:
 The overlay never appears in the taskbar, never shows in Alt-Tab, and never takes focus.
 
 A small **version label** sits at the bottom of the clock: the running binary's version in
-dirty white, turning orange — `v0.1.0 → v0.2.0` — when a newer version exists in a local
-`Cargo.toml`. The repository is found via `$HOVERCLOCK_SOURCE_DIR` (set it to the repo root
-for an installed daemon) or the working directory's ancestors (dev runs). This is an interim
-check — the real update check against GitHub releases comes later.
+shadow-grey, turning orange — `v1.0.0 → v1.1.0` — when a newer release exists on GitHub.
+The check queries the GitHub Releases API hourly (worker thread, bounded timeouts; offline or
+failed checks leave the label in its current colour, never an error).
 
 ### Command-line
 
