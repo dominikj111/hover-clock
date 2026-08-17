@@ -95,7 +95,9 @@ extends to TCP/IP for Windows portability (`docs/proposal.md` §7.4).
 The overlay is designed to run as a **session daemon**: start automatically at login,
 restart on crash, upgrade in place without touching the desktop session. The full lifecycle
 — build, install, upgrade, dev/prod swap, publishing, troubleshooting — is documented in
-[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md); the quick reference is below.
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md); the quick reference is below. If [`just`](https://github.com/casey/just)
+is installed, the common operations are one word: `just install`, `just swap-to-dev`,
+`just check`, `just deploy 1.2.0` (run `just` to list all recipes).
 
 | Command | Effect |
 | --- | --- |

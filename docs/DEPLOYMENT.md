@@ -77,7 +77,15 @@ Alternatively, install from a release tarball (below) without building.
 ## Releases & publishing
 
 Versioning is semver; `Cargo.toml` is the single source of truth. Publishing is
-**main-only**, tag-gated:
+**main-only**, tag-gated. One command (bumps `Cargo.toml` + `Cargo.lock`, commits, pushes
+main, tags and pushes `vX.Y.Z`; refuses on a dirty tree, a non-main branch, or an existing
+tag):
+
+```bash
+./scripts/deploy.sh 1.2.0    # or: just deploy 1.2.0
+```
+
+Manually, the same steps are:
 
 ```bash
 # bump Cargo.toml (and Cargo.lock — a stale lock fails CI's --locked builds)
