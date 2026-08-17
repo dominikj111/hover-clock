@@ -40,6 +40,16 @@ const CORNER_DWELL: std::time::Duration = std::time::Duration::from_millis(200);
 /// longer than `CORNER_DWELL` so a re-entry cancels the hide in time.
 const AUTO_HIDE_DELAY: std::time::Duration = std::time::Duration::from_millis(250);
 
+/// M3 — fade in/out (proposal §5): a short opacity transition layered on
+/// top of the instant show/hide — the window maps first, then fades, so
+/// perceived latency stays under the <50 ms budget. 10 × 15 ms = 150 ms.
+const FADE_STEPS: u32 = 10;
+const FADE_INTERVAL: std::time::Duration = std::time::Duration::from_millis(15);
+
+/// M3 — corner placement: edge margin between the overlay and the
+/// triggered monitor's top-right corner.
+const CORNER_MARGIN: i32 = 16;
+
 /// M3 — the clock widget (proposal §11): time, day, date labels in a
 /// vertical stack, styled by the bundled stylesheet. Pure UI with no
 /// system side effects; this struct is the widget boundary a future
@@ -212,6 +222,13 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
     let (clock_root, clock) = ClockWidget::new();
     window.set_child(Some(&clock_root));
 
+    // M3: the widget's natural size, used to place the window at the
+    // triggered monitor's top-right before its first map (after that,
+    // the window's allocated size is used).
+    let (_, natural_width, _, _) = clock_root.measure(gtk::Orientation::Horizontal, -1);
+    let (_, natural_height, _, _) = clock_root.measure(gtk::Orientation::Vertical, -1);
+    let window_size = (natural_width, natural_height);
+
     // GitHub release check (proposal §11.2, S09): now, then hourly. The
     // HTTP runs on a worker thread; the label is updated on the main
     // loop — offline/failed checks leave it as-is.
@@ -226,16 +243,25 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
     // M1: apply overlay semantics (EWMH hints, non-focusable window type).
     // Configured at realize time — before the window maps — so the window
     // manager reads the hints when it manages the window. Degrades to a
-    // logged warning when X11 is unavailable.
-    match backend::X11WindowBackend::new() {
-        Ok(backend) => {
-            window.connect_realize(move |window| backend.configure(window.upcast_ref()));
-        }
-        Err(err) => glib::g_warning!(
-            "hover-clock",
-            "X11 window backend unavailable; overlay behavior disabled: {err}"
-        ),
-    }
+    // logged warning when X11 is unavailable. Shared with the
+    // OverlayController, which needs it for corner placement (M3).
+    let window_backend: Option<Rc<backend::X11WindowBackend>> =
+        match backend::X11WindowBackend::new() {
+            Ok(backend) => {
+                let backend = Rc::new(backend);
+                let realize_backend = Rc::clone(&backend);
+                window
+                    .connect_realize(move |window| realize_backend.configure(window.upcast_ref()));
+                Some(backend)
+            }
+            Err(err) => {
+                glib::g_warning!(
+                    "hover-clock",
+                    "X11 window backend unavailable; overlay behavior disabled: {err}"
+                );
+                None
+            }
+        };
 
     // M2: activation. The overlay starts hidden and surfaces on demand
     // (hot corner, Super+T); Esc dismisses. Backend failures degrade to
@@ -264,32 +290,37 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
 
     match &activation {
         Some(backend) => {
-            let glue_window = Rc::clone(&window);
-            let glue_backend = Rc::clone(backend);
-            let ipc_backend = Rc::clone(backend);
+            let controller = OverlayController::new(
+                Rc::clone(&window),
+                Rc::clone(backend),
+                window_backend,
+                window_size,
+            );
             let dwell = Rc::new(RefCell::new(None::<glib::SourceId>));
             let hide_timer = Rc::new(RefCell::new(None::<glib::SourceId>));
+            let ipc_controller = Rc::clone(&controller);
             let ipc_dwell = Rc::clone(&dwell);
             let ipc_hide_timer = Rc::clone(&hide_timer);
 
             // Runs on the main context for every activation event.
             let dispatch = move |event: ActivationEvent| match event {
-                ActivationEvent::CornerEntered { .. } => {
+                ActivationEvent::CornerEntered { monitor } => {
                     // Back in the corner: cancel any pending auto-hide and
                     // (re)start the dwell debounce. Showing again is a
-                    // no-op when the overlay is already visible. Per-monitor
-                    // placement is M3 (presentation).
+                    // no-op when the overlay is already visible.
                     if let Some(id) = dwell.borrow_mut().take() {
                         id.remove();
                     }
                     if let Some(id) = hide_timer.borrow_mut().take() {
                         id.remove();
                     }
-                    let window = Rc::clone(&glue_window);
-                    let backend = Rc::clone(&glue_backend);
+                    // M3: placement — the overlay follows the monitor the
+                    // pointer entered.
+                    controller.set_monitor(monitor);
+                    let controller = Rc::clone(&controller);
                     let dwell_timer = Rc::clone(&dwell);
                     let id = glib::timeout_add_local(CORNER_DWELL, move || {
-                        show_overlay(&window, &backend);
+                        controller.show();
                         *dwell_timer.borrow_mut() = None;
                         glib::ControlFlow::Break
                     });
@@ -302,12 +333,11 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
                     if let Some(id) = dwell.borrow_mut().take() {
                         id.remove();
                     }
-                    if glue_window.is_visible() {
-                        let window = Rc::clone(&glue_window);
-                        let backend = Rc::clone(&glue_backend);
+                    if controller.is_visible() {
+                        let controller = Rc::clone(&controller);
                         let hide_timer_cell = Rc::clone(&hide_timer);
                         let id = glib::timeout_add_local(AUTO_HIDE_DELAY, move || {
-                            hide_overlay(&window, &backend);
+                            controller.hide();
                             *hide_timer_cell.borrow_mut() = None;
                             glib::ControlFlow::Break
                         });
@@ -321,11 +351,7 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
                     if let Some(id) = hide_timer.borrow_mut().take() {
                         id.remove();
                     }
-                    if glue_window.is_visible() {
-                        hide_overlay(&glue_window, &glue_backend);
-                    } else {
-                        show_overlay(&glue_window, &glue_backend);
-                    }
+                    controller.toggle();
                 }
                 ActivationEvent::Dismiss => {
                     if let Some(id) = dwell.borrow_mut().take() {
@@ -334,7 +360,7 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
                     if let Some(id) = hide_timer.borrow_mut().take() {
                         id.remove();
                     }
-                    hide_overlay(&glue_window, &glue_backend);
+                    controller.hide();
                 }
                 ActivationEvent::WorkspaceChanged {
                     pointer_in_hot_area,
@@ -353,13 +379,14 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
                         // windows stay on the workspace they were mapped
                         // on); unmap+map in the same batch is
                         // imperceptible, so the overlay follows without
-                        // flicker.
-                        hide_overlay(&glue_window, &glue_backend);
-                        show_overlay(&glue_window, &glue_backend);
+                        // flicker. Instant, not faded: the re-map must
+                        // stay invisible.
+                        controller.hide_instant();
+                        controller.show_instant();
                     } else {
                         // The overlay would otherwise linger on the
                         // workspace the user left.
-                        hide_overlay(&glue_window, &glue_backend);
+                        controller.hide_instant();
                     }
                 }
             };
@@ -381,21 +408,17 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
                 match ipc::Command::parse(line) {
                     Ok(ipc::Command::Show) => {
                         cancel_overlay_timers(&ipc_dwell, &ipc_hide_timer);
-                        show_overlay(&window, &ipc_backend);
+                        ipc_controller.show();
                         "ok".into()
                     }
                     Ok(ipc::Command::Hide) => {
                         cancel_overlay_timers(&ipc_dwell, &ipc_hide_timer);
-                        hide_overlay(&window, &ipc_backend);
+                        ipc_controller.hide();
                         "ok".into()
                     }
                     Ok(ipc::Command::Toggle) => {
                         cancel_overlay_timers(&ipc_dwell, &ipc_hide_timer);
-                        if window.is_visible() {
-                            hide_overlay(&window, &ipc_backend);
-                        } else {
-                            show_overlay(&window, &ipc_backend);
-                        }
+                        ipc_controller.toggle();
                         "ok".into()
                     }
                     Err(err) => format!("error: {err}"),
@@ -476,14 +499,165 @@ fn cancel_overlay_timers(
     }
 }
 
-/// Show the overlay; the activation backend must know so it grabs Esc.
-fn show_overlay(window: &gtk::ApplicationWindow, backend: &Rc<backend::X11ActivationBackend>) {
-    window.set_visible(true);
-    backend.set_overlay_visible(true);
+/// Owns the overlay window + activation backend and the show/hide
+/// behaviour (M3): corner placement at the triggered monitor's top-right
+/// and the fade in/out transition (proposal §5/§8.3). The dwell/auto-hide
+/// debounce timers stay in the event glue; this owns the fade animation
+/// and the last-known hot-area monitor.
+struct OverlayController {
+    window: Rc<gtk::ApplicationWindow>,
+    backend: Rc<backend::X11ActivationBackend>,
+    /// X11 window backend for corner placement; `None` when the overlay
+    /// hints backend is unavailable (placement degrades to GTK default).
+    window_backend: Option<Rc<backend::X11WindowBackend>>,
+    /// Last monitor whose hot area was entered (`CornerEntered` carries
+    /// the geometry; `Toggle` does not — it places on the last one).
+    monitor: RefCell<Option<backend::Monitor>>,
+    /// Measured natural widget size, used to place the window before its
+    /// first map (after that, the window's allocated size is used).
+    size: (i32, i32),
+    /// The in-flight fade animation; replaced by any newer show/hide.
+    fade: Rc<RefCell<Option<glib::SourceId>>>,
 }
 
-/// Hide the overlay and release the dismissal grab.
-fn hide_overlay(window: &gtk::ApplicationWindow, backend: &Rc<backend::X11ActivationBackend>) {
-    window.set_visible(false);
-    backend.set_overlay_visible(false);
+impl OverlayController {
+    fn new(
+        window: Rc<gtk::ApplicationWindow>,
+        backend: Rc<backend::X11ActivationBackend>,
+        window_backend: Option<Rc<backend::X11WindowBackend>>,
+        size: (i32, i32),
+    ) -> Rc<Self> {
+        Rc::new(Self {
+            window,
+            backend,
+            window_backend,
+            monitor: RefCell::new(None),
+            size,
+            fade: Rc::new(RefCell::new(None)),
+        })
+    }
+
+    fn is_visible(&self) -> bool {
+        self.window.is_visible()
+    }
+
+    /// Remember which monitor's hot area was entered — the overlay is
+    /// placed on it at the next show.
+    fn set_monitor(&self, monitor: backend::Monitor) {
+        *self.monitor.borrow_mut() = Some(monitor);
+    }
+
+    /// Move the window to the triggered monitor's top-right corner, with
+    /// a small edge margin. No-op until a monitor is known (e.g. `Toggle`
+    /// before any corner entry → GTK default placement) or the window
+    /// backend is unavailable.
+    fn place(&self) {
+        let Some(monitor) = *self.monitor.borrow() else {
+            return;
+        };
+        let Some(window_backend) = &self.window_backend else {
+            return;
+        };
+        // Prefer the allocated size once mapped; fall back to the
+        // measured natural size on the first show. Only the width matters
+        // — the top-left corner is placed from the monitor's top-right
+        // edge; the window's height does not constrain the position.
+        let w = if self.window.width() > 0 {
+            self.window.width()
+        } else {
+            self.size.0
+        };
+        // Realize without mapping so the X surface exists, then request
+        // the position before the window maps — no flash at GTK's default
+        // location. Realize is idempotent.
+        gtk::prelude::NativeExt::realize(self.window.as_ref());
+        let window: &gtk::Window = self.window.upcast_ref();
+        window_backend.move_to(
+            window,
+            monitor.x + monitor.width - w - CORNER_MARGIN,
+            monitor.y + CORNER_MARGIN,
+        );
+    }
+
+    /// Show with fade-in: the window maps instantly (latency budget,
+    /// proposal §5), then fades in over ~150 ms.
+    fn show(&self) {
+        self.cancel_fade();
+        self.place();
+        self.window.set_visible(true);
+        self.window.set_opacity(0.0);
+        self.backend.set_overlay_visible(true);
+        self.fade_to(1.0, |_, _| {});
+    }
+
+    /// Hide with fade-out: animate opacity to 0, then unmap and release
+    /// the dismissal grab.
+    fn hide(&self) {
+        if !self.is_visible() {
+            return;
+        }
+        self.fade_to(0.0, |window, backend| {
+            window.set_visible(false);
+            backend.set_overlay_visible(false);
+        });
+    }
+
+    /// Toggle between show and hide (Super+T, IPC `toggle`).
+    fn toggle(&self) {
+        if self.is_visible() {
+            self.hide();
+        } else {
+            self.show();
+        }
+    }
+
+    /// Instant show/hide — used by the workspace re-map, which must stay
+    /// imperceptible (no fade, proposal §5).
+    fn show_instant(&self) {
+        self.cancel_fade();
+        self.place();
+        self.window.set_visible(true);
+        self.window.set_opacity(1.0);
+        self.backend.set_overlay_visible(true);
+    }
+
+    fn hide_instant(&self) {
+        self.cancel_fade();
+        self.window.set_visible(false);
+        self.backend.set_overlay_visible(false);
+    }
+
+    fn cancel_fade(&self) {
+        if let Some(id) = self.fade.borrow_mut().take() {
+            id.remove();
+        }
+    }
+
+    /// Animate window opacity from its current value to `to` over
+    /// `FADE_STEPS × FADE_INTERVAL`; `on_done` runs on the main loop when
+    /// the animation completes. Replaces any in-flight fade.
+    fn fade_to<F>(&self, to: f64, on_done: F)
+    where
+        F: Fn(&gtk::ApplicationWindow, &Rc<backend::X11ActivationBackend>) + 'static,
+    {
+        self.cancel_fade();
+        let start = self.window.opacity();
+        let window = Rc::clone(&self.window);
+        let backend = Rc::clone(&self.backend);
+        let cell = Rc::clone(&self.fade);
+        let mut step = 0;
+        let id = glib::timeout_add_local(FADE_INTERVAL, move || {
+            step += 1;
+            let t = step as f64 / FADE_STEPS as f64;
+            window.set_opacity(start + (to - start) * t);
+            if step >= FADE_STEPS {
+                on_done(&window, &backend);
+                *cell.borrow_mut() = None;
+                glib::ControlFlow::Break
+            } else {
+                glib::ControlFlow::Continue
+            }
+        });
+        *self.fade.borrow_mut() = Some(id);
+    }
 }

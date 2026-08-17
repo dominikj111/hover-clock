@@ -170,6 +170,25 @@ impl WindowBackend for X11WindowBackend {
             });
         });
     }
+
+    /// Position the toplevel at absolute root coordinates (M3: corner
+    /// placement). Written on the backend's own connection before the
+    /// window maps, so the manager maps it at the requested position.
+    /// Best-effort: a missing surface or a non-X11 backend degrades to a
+    /// no-op.
+    fn move_to(&self, window: &gtk::Window, x: i32, y: i32) {
+        let Some(surface) = window.surface() else {
+            return;
+        };
+        let Some(x11_surface) = surface.downcast_ref::<gdk4_x11::X11Surface>() else {
+            return;
+        };
+        let xid = x11_surface.xid() as u32;
+        let _ = self.conn.configure_window(
+            xid,
+            &x11rb::protocol::xproto::ConfigureWindowAux::new().x(x).y(y),
+        );
+    }
 }
 
 impl X11WindowBackend {

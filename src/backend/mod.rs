@@ -74,4 +74,12 @@ pub trait WindowBackend: Send + Sync {
     /// `present()`); implementations skip silently when the platform
     /// cannot provide the behavior.
     fn configure(&self, window: &gtk::Window);
+
+    /// Position the toplevel at absolute root coordinates (M3: the
+    /// overlay appears at the triggered monitor's top-right). Best-effort
+    /// — missing platform support degrades to a no-op, never an error
+    /// (proposal §10).
+    fn move_to(&self, window: &gtk::Window, x: i32, y: i32) {
+        let _ = (window, x, y);
+    }
 }
