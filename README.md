@@ -93,7 +93,9 @@ extends to TCP/IP for Windows portability (`docs/proposal.md` §7.4).
 ## Install as a daemon
 
 The overlay is designed to run as a **session daemon**: start automatically at login,
-restart on crash, upgrade in place without touching the desktop session.
+restart on crash, upgrade in place without touching the desktop session. The full lifecycle
+— build, install, upgrade, dev/prod swap, publishing, troubleshooting — is documented in
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md); the quick reference is below.
 
 | Command | Effect |
 | --- | --- |

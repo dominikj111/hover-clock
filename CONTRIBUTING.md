@@ -20,9 +20,10 @@ contributors) and the design contract in [`docs/proposal.md`](./docs/proposal.md
 
 ```bash
 cargo build        # compile
-cargo run          # run: overlay hidden until triggered
+cargo run -- --start   # run the daemon (single instance)
+cargo run          # client — sends `show` to the daemon (no X grabs)
 cargo clippy       # zero warnings expected
-cargo test         # unit tests (currently a placeholder suite)
+cargo test         # unit tests (control plane, version check, …)
 ```
 
 Minimum supported Rust version: **1.92** (declared in `Cargo.toml`; enforced in CI).

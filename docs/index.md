@@ -20,3 +20,4 @@ on a story card; refresh this map whenever the proposal is amended.
 | Open questions | §15 |
 | Decision log | §16 |
 | Compatibility & portability (distros, WMs, Wayland, macOS/Windows) | §17 |
+| Deployment (build, install, upgrade, swap, releases, troubleshooting) | [`DEPLOYMENT.md`](./DEPLOYMENT.md) |
