@@ -6,6 +6,20 @@ on:
   pull_request:
 
 jobs:
+  # Formatting contract: rustfmt of the MSRV toolchain (1.92.0). Pinned
+  # because rustfmt style drifts between versions — local contributors
+  # run `cargo +1.92.0 fmt` to match.
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.92.0
+          components: rustfmt
+      - name: Format
+        run: cargo fmt --check
+
   build:
     runs-on: ubuntu-latest
     strategy:
@@ -18,7 +32,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}
-          components: clippy, rustfmt
+          components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.toolchain }}
@@ -31,7 +45,5 @@ jobs:
         run: cargo build --locked
       - name: Clippy (zero warnings)
         run: cargo clippy --all-targets -- -D warnings
-      - name: Format
-        run: cargo fmt --check
       - name: Test
         run: cargo test

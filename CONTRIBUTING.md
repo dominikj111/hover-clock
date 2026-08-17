@@ -47,6 +47,9 @@ Work proceeds one story at a time off [`roadmap/ROADMAP.md`](./roadmap/ROADMAP.m
 ## Validation
 
 - `cargo build` and `cargo clippy` clean (zero warnings); `cargo test` green.
+- Format with the MSRV toolchain's rustfmt — `cargo +1.92.0 fmt` — because CI pins the
+  Format check to 1.92.0 (rustfmt style drifts between versions; plain `cargo fmt` may
+  produce a diff CI rejects).
 - Live smoke test on an X session: corner dwell shows the overlay, `Esc` hides it,
   `Super + T` toggles, and the active window never becomes the overlay.
 
