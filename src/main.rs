@@ -1,5 +1,6 @@
 mod backend;
 mod ipc;
+mod version;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -61,8 +62,21 @@ impl ClockWidget {
         day.add_css_class("clock-day");
         let date = gtk::Label::new(None);
         date.add_css_class("clock-date");
+        let version = gtk::Label::new(None);
+        version.add_css_class("clock-version");
 
-        for label in [&time, &day, &date] {
+        // Interim version check (src/version.rs): the running binary's
+        // version, plus the local repository's when it is newer — then
+        // the label turns orange instead of dirty white. The real check
+        // (GitHub releases) replaces this later. Static: set once, the
+        // widget tree owns the label.
+        let (version_text, outdated) = version::version_label();
+        version.set_text(&version_text);
+        if outdated {
+            version.add_css_class("outdated");
+        }
+
+        for label in [&time, &day, &date, &version] {
             label.set_halign(gtk::Align::Center);
         }
 
@@ -71,6 +85,7 @@ impl ClockWidget {
         root.append(&time);
         root.append(&day);
         root.append(&date);
+        root.append(&version);
 
         // The frame paints the black margin strip; its 2px padding sits
         // between the window edge and the white border (which lives on

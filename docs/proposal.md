@@ -305,7 +305,10 @@ layouts and leaves). Layouts carry declarative placement properties (`direction`
 ### 11.2 Clock widget
 
 First widget (M3): time/day/date labels in a vertical stack — a `layout` containing `label`
-leaves (§8.1).
+leaves (§8.1). A small **version label** sits at the bottom: the running binary's version,
+coloured dirty white, turning orange (with the repository version appended) when a newer
+version exists in a local `Cargo.toml` — an interim check until the GitHub release check
+lands (see `hover-clock/src/version.rs`).
 
 ### 11.3 Calendar widget
 
@@ -357,7 +360,7 @@ Later, widgets may be driven over the socket (data plane) — a widget contract
 | **M0 — Current** | GTK4-rs project scaffold; single clock label; classic window (repo baseline). |
 | **M1 — Overlay behavior** | EWMH hints (`_ABOVE`, `_SKIP_TASKBAR`, `_SKIP_PAGER`); non-focusable window; X11 `WindowBackend`. |
 | **M2 — Activation** | X11 `ActivationBackend`: hot-corner detection (debounced, edge-triggered) + global `Super + T` + `Esc` dismiss. |
-| **M3 — Presentation** | Full clock widget (time/day/date), CSS styling, fade in/out show/hide transitions, auto-hide timer; daemon/client CLI split (§7.4): `--start`/`-s` starts the single-instance daemon, no-arg client sends `show` over the Unix control socket. |
+| **M3 — Presentation** | Full clock widget (time/day/date), CSS styling, fade in/out show/hide transitions, auto-hide timer; daemon/client CLI split (§7.4): `--start`/`-s` starts the single-instance daemon, no-arg client sends `show` over the Unix control socket; version label with interim local-Cargo.toml check (§11.2). |
 | **M4 — Calendar widget** | Minimal month calendar highlighting today; composite widget model — widgets containing widgets (layout + leaf kinds, Weaver Desktop fabric, §11.1). |
 | **M5 — Registry & config** | Adopt `singleton-registry`: flat capability registry, facade contracts (`WindowBackend`, `ActivationBackend`, `TimeSource`, `Config`), TOML config with live hot-swap reload. |
 | **M6 — IPC (daemon/client)** | Completes the control plane started in M3 (§7.4): full `Command` registry, client retries, `ping`, `status`, `version`, `commands`, `stop`, `widget`/`config reload` (later). |
