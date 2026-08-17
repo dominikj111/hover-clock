@@ -1,11 +1,33 @@
 mod backend;
+mod ipc;
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use backend::{ActivationBackend, ActivationEvent, WindowBackend};
 use chrono::Local;
+use clap::Parser;
 use gtk::{glib, prelude::*};
+
+/// HoverClock CLI — the primary surface (engineering guideline
+/// "CLI-first & control plane"; proposal §7.1): one binary, two roles.
+///
+/// `hover-clock --start` (alias `-s`, and `--daemon` for compatibility)
+/// starts the single-instance daemon. Any other invocation is a client:
+/// it sends one command (default: `show`) to the running daemon over the
+/// control socket. `-h`/`--help` and `-V`/`--version` always work.
+#[derive(Debug, Parser)]
+#[command(version, about)]
+struct Cli {
+    /// Start the daemon (single instance — a second start while one is
+    /// live exits with an explanatory error).
+    #[arg(short = 's', long, alias = "daemon")]
+    start: bool,
+
+    /// Command sent to the daemon: show (default), hide, toggle.
+    #[arg(value_name = "COMMAND")]
+    command: Option<String>,
+}
 
 /// Pointer must dwell in the hot corner this long before the overlay
 /// shows (proposal §5: debounced; common value ~200 ms).
@@ -87,14 +109,74 @@ fn load_css() {
 }
 
 fn main() -> glib::ExitCode {
+    let cli = Cli::parse();
+    if cli.start {
+        run_daemon()
+    } else {
+        run_client(cli.command.as_deref())
+    }
+}
+
+/// Daemon mode: bind the control socket (single-instance guard) and run
+/// the overlay service. The socket binds before GTK initializes, so a
+/// second start fails fast with an explanatory error.
+fn run_daemon() -> glib::ExitCode {
+    let control_service = match ipc::bind_daemon() {
+        Ok(service) => service,
+        Err(message) => {
+            eprintln!("hover-clock: {message}");
+            return glib::ExitCode::FAILURE;
+        }
+    };
+    println!(
+        "hover-clock daemon running (control socket {})",
+        ipc::socket_path().display()
+    );
+
     let application = gtk::Application::builder()
         .application_id("com.github.gtk-rs.examples.clock")
         .build();
-    application.connect_activate(build_ui);
-    application.run()
+    application.connect_shutdown(|_| {
+        // Best-effort socket cleanup on clean exit; a crashed daemon's
+        // stale socket is reclaimed by the next bind (ipc::bind_daemon).
+        let _ = std::fs::remove_file(ipc::socket_path());
+    });
+    application.connect_activate(move |application| build_ui(application, control_service.clone()));
+    // The CLI is ours (clap, above); GTK must not re-parse it. Hand
+    // `g_application_run` only the program name, or GApplication rejects
+    // `--daemon` as an unknown option and exits.
+    application.run_with_args(&["hover-clock"])
 }
 
-fn build_ui(application: &gtk::Application) {
+/// Client mode: send one command to the running daemon. No command
+/// defaults to `show` — a manual run renders the overlay, same as a
+/// hot-corner dwell (proposal §7.4).
+fn run_client(command: Option<&str>) -> glib::ExitCode {
+    let command = match command {
+        Some(raw) => match ipc::Command::parse(raw) {
+            Ok(command) => command,
+            Err(message) => {
+                eprintln!("hover-clock: {message}");
+                eprintln!("hover-clock: known commands: show | hide | toggle");
+                return glib::ExitCode::FAILURE;
+            }
+        },
+        None => ipc::Command::Show,
+    };
+    match ipc::request(command) {
+        Ok(response) => {
+            println!("{response}");
+            glib::ExitCode::SUCCESS
+        }
+        Err(message) => {
+            eprintln!("hover-clock: {message}");
+            eprintln!("hover-clock: start the daemon first: `hover-clock --start`");
+            glib::ExitCode::FAILURE
+        }
+    }
+}
+
+fn build_ui(application: &gtk::Application, control_service: gio::SocketService) {
     let window = gtk::ApplicationWindow::new(application);
 
     window.set_title(Some("Clock Example"));
@@ -157,8 +239,11 @@ fn build_ui(application: &gtk::Application) {
         Some(backend) => {
             let glue_window = Rc::clone(&window);
             let glue_backend = Rc::clone(backend);
+            let ipc_backend = Rc::clone(backend);
             let dwell = Rc::new(RefCell::new(None::<glib::SourceId>));
             let hide_timer = Rc::new(RefCell::new(None::<glib::SourceId>));
+            let ipc_dwell = Rc::clone(&dwell);
+            let ipc_hide_timer = Rc::clone(&hide_timer);
 
             // Runs on the main context for every activation event.
             let dispatch = move |event: ActivationEvent| match event {
@@ -256,8 +341,50 @@ fn build_ui(application: &gtk::Application) {
                 glib::g_warning!("hover-clock", "activation event loop unavailable: {err}");
                 window.set_visible(true);
             } else {
-                // Hidden until a trigger fires.
+                // Hidden until a trigger fires (daemon autostart).
                 window.set_visible(false);
+            }
+
+            // Control plane (proposal §7.4): `hover-clock` and
+            // `hover-clock show|hide|toggle` drive the overlay over the
+            // socket with the same semantics as the equivalent triggers.
+            // Served on the main context via gio async (ipc::install) —
+            // the UI thread never blocks on socket I/O.
+            let ipc_dispatch = move |line: &str| -> String {
+                match ipc::Command::parse(line) {
+                    Ok(ipc::Command::Show) => {
+                        cancel_overlay_timers(&ipc_dwell, &ipc_hide_timer);
+                        show_overlay(&window, &ipc_backend);
+                        "ok".into()
+                    }
+                    Ok(ipc::Command::Hide) => {
+                        cancel_overlay_timers(&ipc_dwell, &ipc_hide_timer);
+                        hide_overlay(&window, &ipc_backend);
+                        "ok".into()
+                    }
+                    Ok(ipc::Command::Toggle) => {
+                        cancel_overlay_timers(&ipc_dwell, &ipc_hide_timer);
+                        if window.is_visible() {
+                            hide_overlay(&window, &ipc_backend);
+                        } else {
+                            show_overlay(&window, &ipc_backend);
+                        }
+                        "ok".into()
+                    }
+                    Err(err) => format!("error: {err}"),
+                }
+            };
+            match ipc::install(control_service, ipc_dispatch) {
+                Ok(control) => {
+                    // Keep the control plane alive for the daemon's lifetime.
+                    // SAFETY: the value is Send+Sync and only ever accessed on
+                    // the main thread; set_data is unsafe only when aliased
+                    // across threads, which cannot happen here.
+                    unsafe { application.set_data("hover-clock-control-plane", control) };
+                }
+                Err(err) => {
+                    glib::g_warning!("hover-clock", "control plane unavailable: {err}");
+                }
             }
         }
         None => window.set_visible(true),
@@ -272,6 +399,20 @@ fn build_ui(application: &gtk::Application) {
         glib::ControlFlow::Continue
     };
     glib::timeout_add_seconds_local(1, tick);
+}
+
+/// Cancel any pending dwell/auto-hide timers — a trigger or control
+/// command supersedes them.
+fn cancel_overlay_timers(
+    dwell: &Rc<RefCell<Option<glib::SourceId>>>,
+    hide_timer: &Rc<RefCell<Option<glib::SourceId>>>,
+) {
+    if let Some(id) = dwell.borrow_mut().take() {
+        id.remove();
+    }
+    if let Some(id) = hide_timer.borrow_mut().take() {
+        id.remove();
+    }
 }
 
 /// Show the overlay; the activation backend must know so it grabs Esc.

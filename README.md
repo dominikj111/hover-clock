@@ -54,7 +54,8 @@ Verify with `pkg-config --modversion gtk4` before building.
 
 ```bash
 cargo build
-cargo run
+cargo run -- --start         # start the daemon (single instance; one terminal)
+cargo run                   # client — tell the daemon to show the overlay
 ```
 
 The daemon starts with the overlay hidden. Triggers:
@@ -65,8 +66,24 @@ The daemon starts with the overlay hidden. Triggers:
 | `Super + T` | Toggle overlay |
 | `Esc` | Hide overlay |
 | Leave the corner | Auto-hide (debounced) |
+| `hover-clock` (any terminal) | Show the overlay — same as a corner dwell |
 
 The overlay never appears in the taskbar, never shows in Alt-Tab, and never takes focus.
+
+### Command-line
+
+The CLI is the primary surface: one binary, two roles, speaking over a Unix control socket
+(`$XDG_RUNTIME_DIR/hoverclock.sock`). The daemon is a **single instance** — a second
+`--start` while one is live exits with an explanatory error, never coexists silently.
+Socket-driven commands (`show`/`hide`/`toggle`) land over the socket; the transport later
+extends to TCP/IP for Windows portability (`docs/proposal.md` §7.4).
+
+| Invocation | Effect |
+| --- | --- |
+| `hover-clock --start` (alias `-s`) | Start the daemon (single instance) |
+| `hover-clock` | Client — show the overlay (default command) |
+| `hover-clock show` | Same as above, explicit |
+| `hover-clock hide` / `hover-clock toggle` | Client — hide / toggle the overlay |
 
 ## Install as a daemon
 
@@ -126,7 +143,7 @@ desktop session, not the init:
   Gentoo) — `install.sh` detects a non-systemd init and installs an **XDG autostart**
   entry (`~/.config/autostart/hover-clock.desktop`), honored by Xfce/GNOME/KDE sessions
   regardless of init. Trade-offs: no crash-restart, and upgrading a *running* daemon
-  needs a session restart until the socket control plane (M6) lands.
+  needs a session restart until the control plane gains a `stop` command (M6).
 
 ### Logs
 
@@ -138,14 +155,14 @@ desktop session, not the init:
 
 ### Dev workflow
 
-`cargo run` starts a second instance, which would fight the daemon over the same X grabs
-(duplicate overlays). The swap scripts keep daemon and dev mode cleanly separated without
-ever losing the production install:
+`cargo run` is the **client** — it sends `show` to the running daemon and never touches X
+grabs, so dev runs and the installed daemon cannot fight:
 
 ```bash
-./scripts/swap-to-dev.sh                # stop daemon, stash binary, cargo run
-./scripts/swap-to-dev.sh -- --some-arg  # with extra arguments
-./scripts/swap-to-prod.sh               # relink binary, daemon back up
+./scripts/swap-to-dev.sh                # stop daemon, stash binary, run from source (daemon)
+cargo run                              # client: show the overlay
+./scripts/swap-to-dev.sh -- --help      # any args pass through to the binary
+./scripts/swap-to-prod.sh              # relink binary, daemon back up
 ```
 
 During dev the daemon registration is hidden (service disabled, autostart entry moved

@@ -10,5 +10,5 @@
 Type=Application
 Name=HoverClock
 Comment=Transient overlay daemon — clock on demand (hot corner / Super+T)
-Exec=__BIN_DIR__/hover-clock
+Exec=__BIN_DIR__/hover-clock --start
 Terminal=false

@@ -55,8 +55,11 @@ fi
 # it). Refuse instead.
 if [ -f "$STATE_FILE" ]; then
     echo "!! Dev mode is already active (swap state exists)." >&2
-    echo "   Return to production with ./scripts/swap-to-prod.sh first," >&2
-    echo "   or stop the running dev session (Ctrl+C) before swapping again." >&2
+    echo "   The production binary is stashed; swap-to-prod restores it." >&2
+    echo "   Options:" >&2
+    echo "     - start the dev daemon now:     cargo run -- --start" >&2
+    echo "     - return to the installed daemon: ./scripts/swap-to-prod.sh" >&2
+    echo "     - stop the running dev session (Ctrl+C) before swapping again" >&2
     exit 1
 fi
 
@@ -121,4 +124,9 @@ echo
 # scripts (e.g. uninstall) can still run while dev is active.
 flock -u 9
 echo "Dev mode. Running from source:"
+if [ "$#" -eq 0 ]; then
+    # No args: run the daemon by default (hover-clock is a client otherwise
+    # and would fail with "cannot reach the daemon" right after we stopped it).
+    exec cargo run -- --start
+fi
 exec cargo run -- "$@"

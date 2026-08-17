@@ -26,7 +26,9 @@ implemented in order, one at a time.
   the system (architecture stays widget-extensible).
 - No direct coupling between input detection and rendering; system APIs live behind trait
   facades (JigsawFlow facade contract) and degrade to logged warnings, never crashes.
-- The daemon is a single binary, dual-mode process; client mode lands with M6.
+- The daemon is a single binary, dual-mode process: `--start`/`-s` runs the daemon
+  (single instance, §7.4 single-instance guard), any other invocation is a client sending a
+  command over the Unix control socket (no args → `show`).
 - Escape always dismisses the overlay if visible — it never has focus, so dismissal cannot
   rely on window focus.
 - Never call `present()` on the overlay (it requests focus); show/hide via `set_visible()`.

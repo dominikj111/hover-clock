@@ -19,7 +19,7 @@ PartOf=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/hover-clock
+ExecStart=%h/.local/bin/hover-clock --start
 Restart=on-failure
 RestartSec=3
 # Only needed if DISPLAY/XAUTHORITY are not in the user manager

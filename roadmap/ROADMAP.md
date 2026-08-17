@@ -11,7 +11,9 @@ hot-corner dwell (200 ms debounced) or `Super + T`, dismisses on `Esc`, never ta
 flashes in the taskbar (GDK skip-taskbar hints, fix on M1/M2), stays invisible to task
 switchers, and auto-hides (debounced) on corner leave. **S04 (M3 — Presentation)** in progress:
 clock widget (time/day/date, §11), static single style (rounded corners, translucent black,
-§8.3), `decorated(false)` and corner-leave auto-hide landed; fade in/out transitions and
+§8.3), `decorated(false)`, corner-leave auto-hide, and the daemon/client CLI split (§7.4) —
+`--start`/`-s` starts the single-instance daemon, no-arg invocations are clients
+sending `show` over the Unix control socket — landed; fade in/out transitions and
 trigger-corner placement remain. Packaging: daemon autostart fixed for DEs that never raise
 `graphical-session.target` (xfce on MX Linux — unit now wanted by `default.target` too); see
 [handoffs/04-autostart-fix.md](handoffs/04-autostart-fix.md).
@@ -58,7 +60,9 @@ trigger-corner placement remain. Packaging: daemon autostart fixed for DEs that 
   transitions, auto-hide timer (mouse leaves overlay/corner, debounced).
 - **Deliverables:** full clock widget (§11 layout), CSS theming, fade in/out show/hide
   transitions, placement at the triggered monitor's top-right, auto-hide wired to
-  `CornerLeft`.
+  `CornerLeft`; daemon/client CLI split (§7.4): `--start`/`-s` starts the single-instance
+  daemon, no-arg client sends `show` over the Unix control socket (`show`/`hide`/`toggle`,
+  single-instance guard, gio async serving on the main loop).
 - **Acceptance:** widget layout + styling visible; show fades in, hide fades out (no hard
   pop); auto-hide dismisses after debounce; overlay appears at the triggered monitor's
   corner; performance targets hold (§13).
@@ -96,12 +100,15 @@ trigger-corner placement remain. Packaging: daemon autostart fixed for DEs that 
 ### S07 — M6 IPC (daemon/client) ⬜
 
 - **Status:** ⬜ backlog
-- **Goal:** Dual-mode binary with a Unix socket control plane and a client module.
-- **Deliverables:** socket listener, `Command` registry, client with retries; commands `ping`,
-  `show`, `hide`, `toggle`, `status`, `version`, `commands`, `stop`.
+- **Goal:** Complete the control plane started in S04: full command registry and lifecycle
+  commands over the existing Unix socket (daemon/client split + `show`/`hide`/`toggle` already
+  landed there, §7.4).
+- **Deliverables:** `Command` registry with `name()`/`execute(args, writer)`, client retries
+  with backoff; commands `ping`, `status`, `version`, `commands`, `stop` (`widget`/`config
+  reload` later).
 - **Acceptance:** client drives overlay state over the socket; overlay stays functional without
   IPC (degradation, §12).
-- **Design refs:** §7, §12, §15 (socket path/ownership, framing)
+- **Design refs:** §7, §12, §15 (socket path/ownership, framing, transport evolution)
 - **Hand-off:** pending
 
 ### S08 — M7 Wayland ⬜

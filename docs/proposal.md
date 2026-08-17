@@ -57,7 +57,7 @@ The daemon is **controllable over a Unix socket** by a built-in client module (w
 | Press `Esc` | Hide overlay |
 | Move mouse away from the overlay/corner | Auto-hide (debounced) |
 | `Esc` + mouse left-click | Hide overlay (dismissal affordance) |
-| `hoverclock show` / `hide` / `toggle` (client) | Drive overlay state over the socket |
+| `hover-clock` / `hover-clock show\|hide\|toggle` (client) | Drive overlay state over the socket (`show` is the no-arg default)
 
 All triggers are **edge-triggered** and debounced to avoid flicker loops.
 
@@ -145,13 +145,21 @@ let backend = core::try_get::<Arc<dyn WindowBackend>>()
 
 The daemon is controlled through a Unix socket by an included client module — the same pattern as workmeshd (`src/daemon.rs` listener + `src/client.rs` sender + `src/command` registry).
 
-- **Single binary, dual mode:** no positional command → daemon mode; positional command (e.g. `hoverclock ping`) → client mode that forwards the command to the daemon over the socket.
+- **Single binary, dual mode:** `--start` (alias `-s`; `--daemon` kept as a hidden
+  compatibility alias for already-installed units) → daemon mode; any other
+  invocation → client mode. No command defaults to `show` — a manual run renders the overlay;
+  positional commands (`show`, `hide`, `toggle`, later `ping`, …) forward to the daemon over
+  the socket.
 - **Unix socket** at `${XDG_RUNTIME_DIR}/hoverclock.sock` (configurable via TOML).
-- **Single-instance guard:** on startup, check the socket path — if a live listener exists, refuse to start; if the socket is stale, remove it and bind. PID file for clean shutdown bookkeeping (workmeshd pattern).
+- **Single-instance guard:** the daemon binds the control socket before GTK initializes — a
+  second `--start` exits immediately with an explanatory error (never two daemons); a
+  stale socket from a crashed daemon is reclaimed. Clean exit unlinks the socket.
 - **Line-based protocol:** request = `command arg1 arg2 ...\n`; response = text lines, terminated by EOF/flush. No framing beyond newlines for v1.
 - **Command registry:** commands implement a shared `Command` trait (`name()`, `async execute(args, writer)`) and are registered in a `HashMap<String, Arc<dyn Command>>`. Unknown commands return a deterministic error line — never a crash.
 - **Client retries:** bounded connection retries with backoff (workmeshd `max_retries` / `retry_delay_ms`), then a deterministic failure message.
-- **GTK main-loop integration:** socket acceptance/reading must run on the GTK main context (glib IO watch, or an async runtime bridged to the GTK main loop). The UI thread must never block on socket I/O.
+- **GTK main-loop integration:** socket acceptance/reading runs on the GTK main context via
+gio `SocketService` + async futures — the UI thread never blocks on socket I/O (no worker
+threads). The dispatch closure touches widgets directly.
 - **Baseline command set (control plane):**
 
   | Command | Effect |
@@ -166,6 +174,13 @@ The daemon is controlled through a Unix socket by an included client module — 
   | `stop` | Graceful shutdown |
 
 - **Degradation:** if IPC fails (socket busy, permission denied), the overlay itself must remain fully functional via hot-corner and shortcut.
+
+**CLI-first (engineering guideline).** The command line is the primary surface: the daemon is
+controllable and demonstrable without a GUI. The transport is a boundary, not a detail — v1
+is a Unix socket; later transports (HTTP/TCP/UDP, hosted by workmeshd) reuse the same command
+contract and make the control plane portable to Windows, which has no Unix sockets. Future
+daemon flags (e.g. `--settings` opening a settings window once config exists, M5) land in
+`src/main.rs`; they are orthogonal to the positional client commands.
 
 ## 8. Rendering Strategy
 
@@ -342,10 +357,10 @@ Later, widgets may be driven over the socket (data plane) — a widget contract
 | **M0 — Current** | GTK4-rs project scaffold; single clock label; classic window (repo baseline). |
 | **M1 — Overlay behavior** | EWMH hints (`_ABOVE`, `_SKIP_TASKBAR`, `_SKIP_PAGER`); non-focusable window; X11 `WindowBackend`. |
 | **M2 — Activation** | X11 `ActivationBackend`: hot-corner detection (debounced, edge-triggered) + global `Super + T` + `Esc` dismiss. |
-| **M3 — Presentation** | Full clock widget (time/day/date), CSS styling, fade in/out show/hide transitions, auto-hide timer. |
+| **M3 — Presentation** | Full clock widget (time/day/date), CSS styling, fade in/out show/hide transitions, auto-hide timer; daemon/client CLI split (§7.4): `--start`/`-s` starts the single-instance daemon, no-arg client sends `show` over the Unix control socket. |
 | **M4 — Calendar widget** | Minimal month calendar highlighting today; composite widget model — widgets containing widgets (layout + leaf kinds, Weaver Desktop fabric, §11.1). |
 | **M5 — Registry & config** | Adopt `singleton-registry`: flat capability registry, facade contracts (`WindowBackend`, `ActivationBackend`, `TimeSource`, `Config`), TOML config with live hot-swap reload. |
-| **M6 — IPC (daemon/client)** | Dual-mode binary, Unix socket listener, `Command` registry, client module with retries; `ping`, `show`, `hide`, `toggle`, `status`, `version`, `commands`, `stop`. |
+| **M6 — IPC (daemon/client)** | Completes the control plane started in M3 (§7.4): full `Command` registry, client retries, `ping`, `status`, `version`, `commands`, `stop`, `widget`/`config reload` (later). |
 | **M7 — Wayland** | Layer-shell backend behind `WindowBackend` / `ActivationBackend` contracts. |
 | **Later (private exploration)** | Notifications, toast messaging, template-driven widgets, socket data-plane API, overlay-shell direction. |
 
@@ -357,6 +372,7 @@ Later, widgets may be driven over the socket (data plane) — a widget contract
 - Overlay placement: fixed corner vs. follows pointer corner?
 - Socket path/ownership: `$XDG_RUNTIME_DIR` vs `/tmp`; socket permissions (0600?).
 - Socket protocol evolution: newline framing vs JSON-RPC once the data plane lands (JigsawFlow's Phase-1 transport is TCP/localhost + JSON-RPC; workmeshd uses newline framing — v1 stays simple).
+- Transport evolution: Unix socket (v1) → HTTP/TCP/UDP hosted by workmeshd, which also makes the control plane portable to Windows (no Unix sockets) — when does the transport boundary become explicit?
 - Async runtime choice for IPC: tokio bridged to the GTK main loop vs glib IO watch only.
 - Whether `Esc` alone is sufficient vs. `Esc` + left-click dismissal semantics on Wayland.
 - Layer-shell anchor/layer choice (`OVERLAY` vs. `TOP`) for stacking above fullscreen.
