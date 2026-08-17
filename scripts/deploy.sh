@@ -45,7 +45,7 @@ fi
 
 # --- bump ------------------------------------------------------------------
 echo "==> Bumping Cargo.toml to $VERSION"
-sed -i "0,/^version = /s//version = \"$VERSION\"/" Cargo.toml
+sed -i "0,/^version = /s/^version = .*/version = \"$VERSION\"/" Cargo.toml
 grep -q "^version = \"$VERSION\"" Cargo.toml || {
     echo "!! failed to update Cargo.toml" >&2
     exit 1
