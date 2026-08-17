@@ -150,10 +150,9 @@ trigger-corner placement remain. Packaging: daemon autostart fixed for DEs that 
 - **Deliverables:** merge dev → main (brings the main-gated release workflow live); semver
   policy (Cargo.toml as single source of truth; bump to 1.0.0 for this release); tag
   `v1.0.0` on main → GitHub release (x86_64 + aarch64 tarballs, existing pipeline);
-  end-to-end upgrade check (`install.sh` → `upgrade.sh` → version label white again);
-  history-leak decision (early AGENTS.md commits reference `../llm_profiles/...` — private
-  workspace layout; rewrite history before the 1.0.0 public push, or accept: already pushed,
-  low practical risk).
+  end-to-end upgrade check (`install.sh` → `upgrade.sh` → version label white again).
+  History-leak decision: **accepted, left as is** (early AGENTS.md commits reference
+  `../llm_profiles/...`; already pushed, low practical risk — no rewrite).
 - **Acceptance:** `v1.0.0` tag on main produces a release; installed daemon shows `v1.0.0`
   (white); main reflects dev's feature set; upgrade path verified end-to-end.
 - **Design refs:** README Releases section, `.github/workflows/release.yml`, S09

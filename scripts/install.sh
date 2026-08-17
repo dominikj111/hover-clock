@@ -91,7 +91,10 @@ if [ "$(ps -p 1 -o comm= 2>/dev/null)" = "systemd" ]; then
     systemctl --user daemon-reload
     systemctl --user import-environment DISPLAY XAUTHORITY 2>/dev/null || true
     echo "==> Registering and starting the daemon"
-    systemctl --user enable --now hover-clock.service
+    systemctl --user enable hover-clock.service
+    # `restart`, not `enable --now`: --now only starts a *stopped* unit —
+    # on a reinstall the old daemon would keep running the replaced binary.
+    systemctl --user restart hover-clock.service
     echo
     echo "HoverClock daemon installed (systemd):"
     echo "  binary   $BINARY"

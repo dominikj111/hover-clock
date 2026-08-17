@@ -100,7 +100,11 @@ fi
 if [ "$service" = "1" ] && [ -f "$UNIT_DIR/hover-clock.service" ]; then
     systemctl --user daemon-reload
     echo "==> Starting the daemon"
-    systemctl --user enable --now hover-clock.service
+    systemctl --user enable hover-clock.service
+    # `restart`, not `enable --now`: --now only starts a *stopped* unit —
+    # the daemon must run the restored (production) binary, not a stale
+    # process mapped from before the stash.
+    systemctl --user restart hover-clock.service
 elif [ "$autostart" = "1" ]; then
     echo "==> Autostart entry restored — the daemon starts at next login"
 else
