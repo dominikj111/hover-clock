@@ -423,6 +423,14 @@ decisions explicit; macOS/Windows are *ports behind the facade contracts* (§10)
 | xfwm4 (test env) | ✅ | Verified live. |
 | i3 | ⚠️ mostly | i3 ignores `_NET_WM_STATE_ABOVE`; overlay must float — add `for_window [window_type="notification"] floating enable` to the i3 config. A fullscreen window may cover the overlay (verify). |
 
+**Workspace following (§5) — WM behavior differs.** xfwm4 does not relocate an
+already-mapped overlay when the workspace changes: the overlay re-maps (unmap+map), which
+costs a one-frame flicker — accepted on the test env. WMs that honor `_NET_WM_DESKTOP` and
+sticky for *mapped* windows (KWin, Mutter, Openbox, Fluxbox) can keep the overlay sticky
+(`_NET_WM_DESKTOP = 0xFFFFFFFF`) instead — no re-map, no flicker; the X11 backend could set
+it best-effort on those. Layer-shell (M7, §17.3) is workspace-independent by construction, so
+both the re-map and the flicker disappear there.
+
 Workspace tracking (§17.3, X11) degrades to a logged warning on WMs that do not
 advertise `_NET_CURRENT_DESKTOP` — by design, never a crash.
 
