@@ -205,20 +205,6 @@ impl X11WindowBackend {
             )?
             .check()?;
 
-        // _NET_WM_DESKTOP: 0xFFFFFFFF (all desktops) — the overlay is
-        // sticky, so switching workspaces never needs a re-map (unmap +
-        // map flickers); visibility is controlled separately, and the
-        // workspace-switch logic only decides show vs hide.
-        self.conn
-            .change_property32(
-                PropMode::REPLACE,
-                xid,
-                atoms.net_wm_desktop,
-                AtomEnum::CARDINAL,
-                &[0xFFFF_FFFF],
-            )?
-            .check()?;
-
         // _NET_WM_STATE: above fullscreen apps, hidden from taskbar/pager.
         self.conn
             .change_property32(
@@ -242,7 +228,6 @@ impl X11WindowBackend {
             skip_pager: self.intern_atom("_NET_WM_STATE_SKIP_PAGER")?,
             net_wm_window_type: self.intern_atom("_NET_WM_WINDOW_TYPE")?,
             notification: self.intern_atom("_NET_WM_WINDOW_TYPE_NOTIFICATION")?,
-            net_wm_desktop: self.intern_atom("_NET_WM_DESKTOP")?,
         })
     }
 
@@ -323,7 +308,6 @@ struct Atoms {
     skip_pager: Atom,
     net_wm_window_type: Atom,
     notification: Atom,
-    net_wm_desktop: Atom,
 }
 
 // ---------------------------------------------------------------------------

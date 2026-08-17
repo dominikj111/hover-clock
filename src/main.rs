@@ -396,14 +396,16 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
                     }
                     if pointer_in_hot_area {
                         // Pointer is in the hot area on the new workspace:
-                        // the switch re-affirms the trigger. The overlay is
-                        // sticky (_NET_WM_DESKTOP = all desktops, backend),
-                        // so it is already present on the new workspace —
-                        // only show when it was hidden; no unmap+map
-                        // re-map, hence no flicker.
-                        if !controller.is_visible() {
-                            controller.show_instant();
-                        }
+                        // show immediately — the switch re-affirms the
+                        // trigger, no dwell needed. Hide first so the
+                        // window re-maps onto the current workspace (X11
+                        // windows stay on the workspace they were mapped
+                        // on); unmap+map in the same batch is
+                        // imperceptible, so the overlay follows without
+                        // flicker. Instant, not faded: the re-map must
+                        // stay invisible.
+                        controller.hide_instant();
+                        controller.show_instant();
                     } else {
                         // The overlay would otherwise linger on the
                         // workspace the user left.

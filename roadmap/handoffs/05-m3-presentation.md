@@ -40,9 +40,7 @@
    A WM that ignores the requested position degrades to GTK default placement (acceptable;
    xfwm4 honors it).
 3. **Workspace re-map is instant, not faded** — the unmap+map batch must stay imperceptible
-   (§5); only corner/Esc/toggle paths fade. (Superseded by the sticky-window change: the
-   overlay is now `_NET_WM_DESKTOP`-sticky, so workspace switches need no re-map at all —
-   the switch handler only decides show vs hide.)
+   (§5); only corner/Esc/toggle paths fade.
 4. **Widget size for placement** is measured at setup (`widget.measure`, natural size) with
    the allocated size preferred once the window has mapped; version-label text changes can
    shift the width slightly (margin absorbs it).
