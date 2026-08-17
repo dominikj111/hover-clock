@@ -151,16 +151,17 @@ fn sha256_file(path: &Path) -> Result<String, String> {
 
 /// Restart the daemon. systemd path: `systemctl --user restart` stops the
 /// unit (SIGTERM — the old process releases the control socket and GTK's
-/// shutdown hook unlinks it) then starts the new binary. Non-systemd
-/// fallback: a detached `sh -c "sleep 1; exec … --start"` waits for this
+/// shutdown hook unlinks it) then starts the new binary — used only when
+/// the unit actually exists *and* is enabled (dev mode disables it).
+/// Otherwise a detached `sh -c "sleep 1; exec … --start"` waits for this
 /// process to exit before the new one binds the socket, avoiding the
-/// single-instance guard.
+/// single-instance guard; the new process reclaims the stale socket file.
 fn restart(binary: &Path) -> Result<(), String> {
     let unit = std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_default()
         .join(".config/systemd/user/hover-clock.service");
-    if unit.is_file() {
+    if unit.is_file() && unit_enabled() {
         let status = Command::new("systemctl")
             .args(["--user", "restart", "hover-clock"])
             .status()
@@ -176,6 +177,17 @@ fn restart(binary: &Path) -> Result<(), String> {
         .spawn()
         .map_err(|err| format!("cannot spawn re-exec helper: {err}"))?;
     std::process::exit(0);
+}
+
+/// Is the systemd user unit currently enabled? (Enabled = the production
+/// daemon the unit starts; disabled in dev mode — the stashed binary the
+/// unit points at is missing, so `systemctl restart` would fail.)
+fn unit_enabled() -> bool {
+    Command::new("systemctl")
+        .args(["--user", "is-enabled", "hover-clock"])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
 }
 
 #[cfg(test)]
