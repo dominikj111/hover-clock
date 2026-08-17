@@ -80,8 +80,6 @@ window.background {
     box-shadow: none;
     outline: none;
     transition: 150ms;
-    /* GTK 4.12+; ignored gracefully on older GTK. */
-    cursor: pointer;
 }
 
 .clock-version-button:hover {
