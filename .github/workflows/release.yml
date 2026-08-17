@@ -69,4 +69,24 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
-          generate_release_notes: true
+          # An explicit body, not `generate_release_notes`: both matrix
+          # jobs run this step on the same release, and the second
+          # invocation regenerated/appended the notes — for a
+          # commit-only repo those are just the "Full Changelog" footer,
+          # which ended up doubled on every release page. A static body is
+          # deterministic.
+          body: |
+            ## ${{ github.ref_name }}
+
+            Transient Linux overlay daemon (GTK4, X11): a clock that surfaces on demand via
+            hot-corner dwell or `Super + T`, above fullscreen apps, without ever taking focus.
+
+            ### Install
+            ```bash
+            tar xzf hover-clock-${{ github.ref_name }}-x86_64.tar.gz -C ~/.local/bin
+            systemctl --user restart hover-clock
+            ```
+
+            System dependency: `libgtk-4-1` (Debian/Raspberry Pi OS) or `gtk4` (Fedora).
+
+            Full changelog: https://github.com/dominikj111/hover-clock/commits/${{ github.ref_name }}
