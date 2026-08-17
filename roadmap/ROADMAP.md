@@ -124,6 +124,10 @@ transitions and trigger-corner placement — **S04 and S09 delivered** (hand-off
   `ActivationBackend` contracts.
 - **Deliverables:** layer-shell `WindowBackend`; pointer/shortcut `ActivationBackend`.
 - **Acceptance:** same behavior contract on a Wayland compositor; X11 path unchanged.
+- **Note:** layer-shell surfaces are compositor-managed and **not workspace-bound** — a
+  workspace switch never touches the overlay, so the xfwm4 re-map flicker (S04 hand-off)
+  disappears by construction; layer-shell **anchoring** (top-right + margins) also replaces
+  the X11 placement hack natively. GNOME/Mutter does not implement layer-shell (§17.3).
 - **Design refs:** §10, §15 (layer-shell anchor/layer choice)
 - **Hand-off:** pending
 
