@@ -240,13 +240,6 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
     let (_, natural_height, _, _) = clock_root.measure(gtk::Orientation::Vertical, -1);
     let window_size = (natural_width, natural_height);
 
-    // M3: realize once up front (GTK's own path — `gtk_widget_realize`,
-    // not `gtk_native_realize` directly) so the X surface exists for
-    // corner placement before the first show. Realize ≠ map: the overlay
-    // stays hidden until a trigger fires. The realize signal also applies
-    // the EWMH overlay hints (connect_realize above).
-    gtk::prelude::WidgetExt::realize(&window);
-
     // GitHub release check (proposal §11.2, S09): now, then hourly. The
     // HTTP runs on a worker thread; the label is updated on the main
     // loop — offline/failed checks leave it as-is.
@@ -285,6 +278,17 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
                 None
             }
         };
+
+    // M3: realize once up front (GTK's own path — `gtk_widget_realize`,
+    // not `gtk_native_realize` directly) so the X surface exists for
+    // corner placement before the first show. Realize ≠ map: the overlay
+    // stays hidden until a trigger fires. This must run *after* the
+    // realize handler above is connected: `gtk_widget_realize` emits the
+    // realize signal synchronously and exactly once (GTK keeps toplevels
+    // realized for their lifetime), so a handler connected after this
+    // call would never fire — the overlay would map as a plain NORMAL
+    // window (taskbar entry, focusable, not above fullscreen).
+    gtk::prelude::WidgetExt::realize(&window);
 
     // M2: activation. The overlay starts hidden and surfaces on demand
     // (hot corner, Super+T); Esc dismisses. Backend failures degrade to
