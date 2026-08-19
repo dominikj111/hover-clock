@@ -21,3 +21,4 @@ on a story card; refresh this map whenever the proposal is amended.
 | Decision log | §16 |
 | Compatibility & portability (distros, WMs, Wayland, macOS/Windows) | §17 |
 | Deployment (build, install, upgrade, swap, releases, troubleshooting) | [`DEPLOYMENT.md`](./DEPLOYMENT.md) |
+| Wayland testing (labwc session setup, caveats) | [`WAYLAND_TESTING.md`](./WAYLAND_TESTING.md) |

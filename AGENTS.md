@@ -14,6 +14,7 @@ implemented in order, one at a time.
 |------|------|
 | Understand the system / intended behavior | `docs/proposal.md` — always read the § cited on the story card before starting |
 | Check current status / what's next | `roadmap/ROADMAP.md` — current story + hand-offs |
+| Set up / use the Wayland test session | `docs/WAYLAND_TESTING.md` — labwc session, install, caveats |
 | Change the design | `docs/proposal.md`, amending `docs/index.md` in the same change |
 | Change window / activation backends | `src/backend/` — facade contracts in `src/backend/mod.rs` |
 | Add a widget | proposal §11 (widget contract); composition in `src/main.rs` |
