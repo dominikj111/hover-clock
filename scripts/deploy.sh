@@ -52,9 +52,11 @@ grep -q "^version = \"$VERSION\"" Cargo.toml || {
 }
 
 # Cargo.lock pins the package version too — a stale lock fails CI's
-# `--locked` builds. `cargo build` refreshes it incrementally.
+# `--locked` builds. `cargo build` refreshes it incrementally. Scripted
+# build: bypass the dev-session guard (build.rs) — deploying a release is
+# not a dev session.
 echo "==> Syncing Cargo.lock"
-cargo build >/dev/null 2>&1
+HOVERCLOCK_BYPASS_DEV_GUARD=1 cargo build >/dev/null 2>&1
 lock_ver="$(awk '/^name = "hover-clock"$/{f=1} f && /^version = /{print $3; exit}' Cargo.lock | tr -d '"')"
 if [ "$lock_ver" != "$VERSION" ]; then
     echo "!! Cargo.lock version is $lock_ver, expected $VERSION" >&2

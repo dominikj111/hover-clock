@@ -143,6 +143,13 @@ Two caveats, both handled by the scripts:
   detects the stray process and prints the recovery steps (`pkill -x hover-clock`, then
   `systemctl --user start hover-clock`).
 
+**Build guard (`build.rs`).** On a machine with the swap machinery installed, a **debug**
+build from the repo (`cargo build`, `cargo run`, `cargo test`, clippy) aborts unless the dev
+session state exists — the error prints the exact recovery commands. This makes the
+`swap-to-dev` ceremony impossible to skip. Bypasses: `--release` builds (`install.sh`,
+`upgrade.sh`), CI, and `HOVERCLOCK_BYPASS_DEV_GUARD=1` for scripted builds (`deploy.sh`
+sets it around its Cargo.lock sync).
+
 Dev-mode restart loops (unit started while the binary is stashed) are capped by the unit's
 `StartLimitIntervalSec`/`StartLimitBurst`; both swap scripts also call
 `systemctl --user reset-failed` so a stale restart counter cannot persist.

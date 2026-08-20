@@ -50,6 +50,11 @@ daemon, stashes the installed binary aside, runs from source. Never start a dev 
 2. **After** the session: `./scripts/swap-to-prod.sh` — restores the installed binary and
 restarts the daemon.
 
+The guard is enforced mechanically: `build.rs` aborts any **debug** build (`cargo build`,
+`cargo run`, `cargo test`, clippy) on this machine when the swap state is absent, with the
+recovery commands in the error. Release builds, CI, and `HOVERCLOCK_BYPASS_DEV_GUARD=1`
+(scripted builds such as `deploy.sh`) bypass it.
+
 If a `hover-clock` process is running but `~/.local/state/hover-clock/state` is absent, a dev
 session was started outside the swap scripts: stop it (`pkill -x hover-clock`), reset the
 unit (`systemctl --user reset-failed hover-clock`), and verify the installed daemon
