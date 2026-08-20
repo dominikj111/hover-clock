@@ -39,8 +39,11 @@ and starts it. Registration mechanism is auto-detected:
   **enables + restarts**, so a reinstall always runs the fresh binary.
 - **sysvinit / OpenRC / runit** — an XDG autostart entry at
   `~/.config/autostart/hover-clock.desktop` (honored by Xfce/GNOME/KDE regardless of init).
-  Trade-off: no crash-restart, and upgrading a *running* daemon needs a session restart
-  until the control plane gains a `stop` command (M6).
+  Trade-off: no crash-restart. There is no unit, so `systemctl --user restart
+  hover-clock` does not work here — stop/restart a running daemon with
+  `hover-clock --stop` / `hover-clock --restart`, which are init-independent (they drive
+  the daemon over its control socket, so they work on every install — including
+  systemd).
 
 `install.sh` refuses while dev mode is active (see Swap) — return to production first.
 
@@ -104,7 +107,10 @@ Install from a release:
 
 ```bash
 tar xzf hover-clock-vX.Y.Z-x86_64.tar.gz -C ~/.local/bin
-systemctl --user restart hover-clock     # run the new binary
+# systemd installs: the unit restarts the daemon on the fresh binary.
+# Every install (systemd or not): hover-clock --restart works too.
+systemctl --user restart hover-clock     # run the new binary (systemd only)
+hover-clock --restart                    # init-independent alternative
 ```
 
 ## Swap between dev and production

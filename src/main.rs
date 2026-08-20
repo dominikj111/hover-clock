@@ -17,7 +17,10 @@ use gtk::{glib, prelude::*};
 /// `hover-clock --start` (alias `-s`, and `--daemon` for compatibility)
 /// starts the single-instance daemon. Any other invocation is a client:
 /// it sends one command (default: `show`) to the running daemon over the
-/// control socket. `-h`/`--help` and `-V`/`--version` always work.
+/// control socket. `--stop`/`--restart` (and the equivalent positional
+/// `stop`/`restart` commands) manage the daemon process itself, so they
+/// work with any init — no systemd unit required. `-h`/`--help` and
+/// `-V`/`--version` always work.
 #[derive(Debug, Parser)]
 #[command(version, about)]
 struct Cli {
@@ -26,7 +29,19 @@ struct Cli {
     #[arg(short = 's', long, alias = "daemon")]
     start: bool,
 
-    /// Command sent to the daemon: show (default), hide, toggle.
+    /// Stop the running daemon: it exits cleanly and releases the
+    /// control socket.
+    #[arg(long)]
+    stop: bool,
+
+    /// Restart the running daemon in place: it re-executes itself, so
+    /// the process id stays the same and supervisors (systemd user
+    /// unit, autostart) keep tracking it.
+    #[arg(long)]
+    restart: bool,
+
+    /// Command sent to the daemon: show (default), hide, toggle,
+    /// stop, restart.
     #[arg(value_name = "COMMAND")]
     command: Option<String>,
 }
@@ -47,16 +62,22 @@ const AUTO_HIDE_DELAY: std::time::Duration = std::time::Duration::from_millis(25
 const FADE_STEPS: u32 = 10;
 const FADE_INTERVAL: std::time::Duration = std::time::Duration::from_millis(15);
 
-/// M3 — corner placement: edge margin between the overlay and the
-/// triggered monitor's top-right corner.
-const CORNER_MARGIN: i32 = 16;
+/// M3 — placement: how far above the triggered monitor's vertical centre
+/// the overlay appears (user preference; the strip trigger is full-width,
+/// so a corner is arbitrary — the overlay reads best upper-middle).
+const OVERLAY_UP_OFFSET: i32 = 100;
 
 /// M3 — the clock widget (proposal §11): time, day, date labels in a
 /// vertical stack, styled by the bundled stylesheet. Pure UI with no
 /// system side effects; this struct is the widget boundary a future
 /// widget registry / `WidgetProvider` (proposal §11) would swap out.
 struct ClockWidget {
-    time: gtk::Label,
+    /// `HH` and `MM` with the colon between them, all at the full clock
+    /// size; the seconds (`SS`) render in a separate, smaller label
+    /// right after, no separator colon.
+    hours: gtk::Label,
+    minutes: gtk::Label,
+    seconds: gtk::Label,
     day: gtk::Label,
     date: gtk::Label,
     /// The plain label, or a click-to-update button when a newer release
@@ -72,33 +93,72 @@ impl ClockWidget {
     /// border, rounded, translucent black) holding the three labels, and
     /// fill them once.
     fn new() -> (gtk::Box, Self) {
-        let time = gtk::Label::new(None);
-        time.add_css_class("clock-time");
+        let hours = gtk::Label::new(None);
+        hours.add_css_class("clock-time");
+        // The colon between hours and minutes is its own label so CSS
+        // can add breathing room around it (style.css) — the digits stay
+        // tight, the separator gets the space.
+        let colon = gtk::Label::new(Some(":"));
+        colon.add_css_class("clock-time");
+        colon.add_css_class("clock-time-colon");
+        let minutes = gtk::Label::new(None);
+        minutes.add_css_class("clock-time");
+        // Seconds: a separate, smaller label right after `HH:MM`, no
+        // separator colon — the size difference is the visual cue. Pure
+        // CSS (`.clock-seconds`), so a future theme swaps it wholesale.
+        // Baseline-aligned so the seconds sit on the same line as the
+        // minutes (the digits share one baseline, like HH:MM:SS did).
+        let seconds = gtk::Label::new(None);
+        seconds.add_css_class("clock-seconds");
+        let time_row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        time_row.append(&hours);
+        time_row.append(&colon);
+        time_row.append(&minutes);
+        time_row.append(&seconds);
+        hours.set_valign(gtk::Align::Baseline);
+        colon.set_valign(gtk::Align::Baseline);
+        minutes.set_valign(gtk::Align::Baseline);
+        seconds.set_valign(gtk::Align::Baseline);
         let day = gtk::Label::new(None);
         day.add_css_class("clock-day");
         let date = gtk::Label::new(None);
         date.add_css_class("clock-date");
         let version_area = gtk::Box::new(gtk::Orientation::Vertical, 0);
         version_area.add_css_class("clock-version-area");
+        // DEV badge: shown only when the running binary is a dev build
+        // (debug profile — `cargo build`/`cargo run`), never on a
+        // production release binary. Compile-time, so a dev build cannot
+        // forget it and a prod binary cannot gain it.
+        let version_row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        let dev_label = gtk::Label::new(Some("DEV"));
+        dev_label.add_css_class("clock-version-dev");
+        dev_label.set_visible(cfg!(debug_assertions));
         let version_label = gtk::Label::new(None);
         version_label.add_css_class("clock-version");
         // Shows the running version immediately; the GitHub release check
         // (version::latest_release) swaps in the button with the newer
         // version when one exists.
         version_label.set_text(&version::current_label());
+        version_row.append(&dev_label);
+        version_row.append(&version_label);
         let version_button = gtk::Button::new();
         version_button.add_css_class("clock-version-button");
         version_button.set_visible(false);
-        version_area.append(&version_label);
+        version_area.append(&version_row);
         version_area.append(&version_button);
 
-        for label in [&time, &day, &date, &version_label] {
+        for label in [&day, &date, &version_label] {
             label.set_halign(gtk::Align::Center);
         }
+        // Center the time (HH:MM + seconds) and version rows as units.
+        time_row.set_halign(gtk::Align::Center);
+        // Center the DEV+version row as a unit (the row spans the widget
+        // width otherwise, splitting the badge from the version text).
+        version_row.set_halign(gtk::Align::Center);
 
         let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
         root.add_css_class("clock-widget");
-        root.append(&time);
+        root.append(&time_row);
         root.append(&day);
         root.append(&date);
         root.append(&version_area);
@@ -112,7 +172,9 @@ impl ClockWidget {
         frame.append(&root);
 
         let widget = Self {
-            time,
+            hours,
+            minutes,
+            seconds,
             day,
             date,
             version_label,
@@ -125,7 +187,9 @@ impl ClockWidget {
     /// Refresh all labels from the current wall-clock time.
     fn update(&self) {
         let now = Local::now();
-        self.time.set_text(&now.format("%H:%M:%S").to_string());
+        self.hours.set_text(&now.format("%H").to_string());
+        self.minutes.set_text(&now.format("%M").to_string());
+        self.seconds.set_text(&now.format("%S").to_string());
         self.day.set_text(&now.format("%A").to_string());
         self.date.set_text(&now.format("%-d %B %Y").to_string());
     }
@@ -149,6 +213,10 @@ fn main() -> glib::ExitCode {
     let cli = Cli::parse();
     if cli.start {
         run_daemon()
+    } else if cli.stop {
+        run_client(Some("stop"))
+    } else if cli.restart {
+        run_client(Some("restart"))
     } else {
         run_client(cli.command.as_deref())
     }
@@ -194,7 +262,7 @@ fn run_client(command: Option<&str>) -> glib::ExitCode {
             Ok(command) => command,
             Err(message) => {
                 eprintln!("hover-clock: {message}");
-                eprintln!("hover-clock: known commands: show | hide | toggle");
+                eprintln!("hover-clock: known commands: show | hide | toggle | stop | restart");
                 return glib::ExitCode::FAILURE;
             }
         },
@@ -211,6 +279,36 @@ fn run_client(command: Option<&str>) -> glib::ExitCode {
             glib::ExitCode::FAILURE
         }
     }
+}
+
+/// Re-exec the current binary as the daemon (`--start`), replacing this
+/// process image in place. Returns `false` after warning when the exec
+/// could not be performed (caller should stop instead). Never returns on
+/// success — exec replaces the process, keeping the same PID so
+/// supervisors (systemd user unit, autostart) keep tracking the daemon.
+fn reexec_daemon() -> bool {
+    use std::os::unix::process::CommandExt;
+    // Resolve the executable path: exec'ing /proc/self/exe directly would
+    // truncate the process name (comm) to "exe", breaking `pkill -x
+    // hover-clock` in the lifecycle scripts and the systemd unit. The
+    // resolved file name keeps comm = "hover-clock".
+    let exe = match std::fs::read_link("/proc/self/exe") {
+        Ok(path) => path,
+        Err(err) => {
+            glib::g_warning!(
+                "hover-clock",
+                "daemon restart: cannot resolve own path: {err}"
+            );
+            return false;
+        }
+    };
+    let err = std::process::Command::new(exe)
+        // Keep argv[0] clean for `ps` output (default would be the path).
+        .arg0("hover-clock")
+        .arg("--start")
+        .exec();
+    glib::g_warning!("hover-clock", "daemon restart failed: {err}");
+    false
 }
 
 fn build_ui(application: &gtk::Application, control_service: gio::SocketService) {
@@ -233,9 +331,8 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
     let (clock_root, clock) = ClockWidget::new();
     window.set_child(Some(&clock_root));
 
-    // M3: the widget's natural size, used to place the window at the
-    // triggered monitor's top-right before its first map (after that,
-    // the window's allocated size is used).
+    // M3: the widget's natural size, used to place the window before its
+    // first map (after that, the window's allocated size is used).
     let (_, natural_width, _, _) = clock_root.measure(gtk::Orientation::Horizontal, -1);
     let (_, natural_height, _, _) = clock_root.measure(gtk::Orientation::Vertical, -1);
     let window_size = (natural_width, natural_height);
@@ -260,7 +357,7 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
     // Configured at realize time — before the window maps — so the window
     // manager reads the hints when it manages the window. Degrades to a
     // logged warning when X11 is unavailable. Shared with the
-    // OverlayController, which needs it for corner placement (M3).
+    // OverlayController, which needs it for placement (M3).
     let window_backend: Option<Rc<backend::X11WindowBackend>> =
         match backend::X11WindowBackend::new() {
             Ok(backend) => {
@@ -281,7 +378,8 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
 
     // M3: realize once up front (GTK's own path — `gtk_widget_realize`,
     // not `gtk_native_realize` directly) so the X surface exists for
-    // corner placement before the first show. Realize ≠ map: the overlay
+    // placement happens after the first map (the WM owns the position
+    // before then). Realize ≠ map: the overlay
     // stays hidden until a trigger fires. This must run *after* the
     // realize handler above is connected: `gtk_widget_realize` emits the
     // realize signal synchronously and exactly once (GTK keeps toplevels
@@ -425,10 +523,12 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
             }
 
             // Control plane (proposal §7.4): `hover-clock` and
-            // `hover-clock show|hide|toggle` drive the overlay over the
-            // socket with the same semantics as the equivalent triggers.
-            // Served on the main context via gio async (ipc::install) —
-            // the UI thread never blocks on socket I/O.
+            // `hover-clock show|hide|toggle|stop|restart` drive the
+            // overlay and the daemon process over the socket with the
+            // same semantics as the equivalent triggers. Served on the
+            // main context via gio async (ipc::install) — the UI thread
+            // never blocks on socket I/O.
+            let app = application.clone();
             let ipc_dispatch = move |line: &str| -> String {
                 match ipc::Command::parse(line) {
                     Ok(ipc::Command::Show) => {
@@ -444,6 +544,38 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
                     Ok(ipc::Command::Toggle) => {
                         cancel_overlay_timers(&ipc_dwell, &ipc_hide_timer);
                         ipc_controller.toggle();
+                        "ok".into()
+                    }
+                    Ok(ipc::Command::Stop) => {
+                        // Hide and quit. The quit is deferred a tick so
+                        // the gio async task can write the response
+                        // first; the shutdown handler removes the socket.
+                        cancel_overlay_timers(&ipc_dwell, &ipc_hide_timer);
+                        ipc_controller.hide_instant();
+                        let app = app.clone();
+                        glib::timeout_add_local_once(
+                            std::time::Duration::from_millis(50),
+                            move || app.quit(),
+                        );
+                        "ok".into()
+                    }
+                    Ok(ipc::Command::Restart) => {
+                        // Re-exec in place after the response is written:
+                        // same PID, so systemd/autostart keep tracking
+                        // the daemon. The control socket fd closes on
+                        // exec (CLOEXEC); the fresh daemon reclaims the
+                        // stale socket file at bind.
+                        cancel_overlay_timers(&ipc_dwell, &ipc_hide_timer);
+                        ipc_controller.hide_instant();
+                        let app = app.clone();
+                        glib::timeout_add_local_once(
+                            std::time::Duration::from_millis(50),
+                            move || {
+                                if !reexec_daemon() {
+                                    app.quit();
+                                }
+                            },
+                        );
                         "ok".into()
                     }
                     Err(err) => format!("error: {err}"),
@@ -598,14 +730,14 @@ fn cancel_overlay_timers(
 }
 
 /// Owns the overlay window + activation backend and the show/hide
-/// behaviour (M3): corner placement at the triggered monitor's top-right
-/// and the fade in/out transition (proposal §5/§8.3). The dwell/auto-hide
-/// debounce timers stay in the event glue; this owns the fade animation
-/// and the last-known hot-area monitor.
+/// behaviour (M3): placement centred above the triggered monitor's
+/// middle and the fade in/out transition (proposal §5/§8.3). The
+/// dwell/auto-hide debounce timers stay in the event glue; this owns the
+/// fade animation and the last-known hot-area monitor.
 struct OverlayController {
     window: Rc<gtk::ApplicationWindow>,
     backend: Rc<backend::X11ActivationBackend>,
-    /// X11 window backend for corner placement; `None` when the overlay
+    /// X11 window backend for placement; `None` when the overlay
     /// hints backend is unavailable (placement degrades to GTK default).
     window_backend: Option<Rc<backend::X11WindowBackend>>,
     /// Last monitor whose hot area was entered (`CornerEntered` carries
@@ -645,44 +777,51 @@ impl OverlayController {
         *self.monitor.borrow_mut() = Some(monitor);
     }
 
-    /// Move the window to the triggered monitor's top-right corner, with
-    /// a small edge margin. No-op until a monitor is known (e.g. `Toggle`
-    /// before any corner entry → GTK default placement) or the window
-    /// backend is unavailable.
+    /// Position the window for the next show: horizontally centred on the
+    /// last-known monitor (dwell trigger) — or the root screen before any
+    /// dwell (manual `show`/`toggle`) — `OVERLAY_UP_OFFSET` above the
+    /// vertical centre. Runs before the window maps; the backend marks the
+    /// position program-specified (ICCCM USPosition) so the WM maps the
+    /// window there directly — no render-then-jump. No-op until a backend
+    /// is available; degrades to GTK default placement.
     fn place(&self) {
-        let Some(monitor) = *self.monitor.borrow() else {
-            return;
-        };
         let Some(window_backend) = &self.window_backend else {
             return;
         };
-        // Prefer the allocated size once mapped; fall back to the
-        // measured natural size on the first show. Only the width matters
-        // — the top-left corner is placed from the monitor's top-right
-        // edge; the window's height does not constrain the position.
+        let window: &gtk::Window = self.window.upcast_ref();
         let w = if self.window.width() > 0 {
             self.window.width()
         } else {
             self.size.0
         };
-        // The window was realized at setup, so the X surface already
-        // exists; request the position before the window maps — no flash
-        // at GTK's default location.
-        let window: &gtk::Window = self.window.upcast_ref();
+        let h = if self.window.height() > 0 {
+            self.window.height()
+        } else {
+            self.size.1
+        };
+        let (cx, cy, cw, ch) = match *self.monitor.borrow() {
+            Some(monitor) => (monitor.x, monitor.y, monitor.width, monitor.height),
+            None => {
+                let Some((sw, sh)) = window_backend.screen_size() else {
+                    return;
+                };
+                (0, 0, sw, sh)
+            }
+        };
         window_backend.move_to(
             window,
-            monitor.x + monitor.width - w - CORNER_MARGIN,
-            monitor.y + CORNER_MARGIN,
+            cx + (cw - w) / 2,
+            cy + (ch - h) / 2 - OVERLAY_UP_OFFSET,
         );
     }
 
-    /// Show with fade-in: the window maps instantly (latency budget,
-    /// proposal §5), then fades in over ~150 ms.
+    /// Show with fade-in: the window maps at the placed position (latency
+    /// budget, proposal §5), then fades in over ~150 ms.
     fn show(&self) {
         self.cancel_fade();
         self.place();
-        self.window.set_visible(true);
         self.window.set_opacity(0.0);
+        self.window.set_visible(true);
         self.backend.set_overlay_visible(true);
         self.fade_to(1.0, |_, _| {});
     }

@@ -6,16 +6,17 @@ story is done only when confirmed implemented (acceptance met + verification per
 
 ## Current state
 
-The daemon runs on X11 (xfwm4-verified): overlay is hidden until triggered, shows on top-right
-hot-corner dwell (200 ms debounced) or `Super + T`, dismisses on `Esc`, never takes focus, never
+The daemon runs on X11 (xfwm4-verified): overlay is hidden until triggered, shows on top-edge
+dwell (200 ms debounced) or `Super + T`, dismisses on `Esc`, never takes focus, never
 flashes in the taskbar (GDK skip-taskbar hints, fix on M1/M2), stays invisible to task
-switchers, and auto-hides (debounced) on corner leave. **S04 (M3 — Presentation)** in progress:
+switchers, and auto-hides (debounced) on hot-area leave. **S04 (M3 — Presentation)** in progress:
 clock widget (time/day/date, §11), static single style (rounded corners, translucent black,
 §8.3), `decorated(false)`, corner-leave auto-hide, and the daemon/client CLI split (§7.4) —
 `--start`/`-s` starts the single-instance daemon, no-arg invocations are clients
 sending `show` over the Unix control socket — landed, plus the version row (GitHub release
 check + click-to-update button, §11.2/S09) and the M3 presentation finish: fade in/out
-transitions and trigger-corner placement — **S04 and S09 delivered** (hand-offs
+transitions and placement (centred above the triggered monitor's middle) — **S04 and S09
+delivered** (hand-offs
 `05-m3-presentation.md`, `06-s09-version-update.md`); release flow live (v1.0.0–v1.2.0,
 `just deploy`). **Next: S05 (M4 Calendar widget)**. Packaging: daemon autostart fixed for DEs that never raise
 `graphical-session.target` (xfce on MX Linux — unit now wanted by `default.target` too); see
@@ -59,12 +60,13 @@ transitions and trigger-corner placement — **S04 and S09 delivered** (hand-off
 ### S04 — M3 Presentation ✅ 2026-08-17
 
 - **Status:** ✅ 2026-08-17 — all deliverables landed and live-verified: fade in/out
-  transitions, trigger-corner placement, daemon/client CLI split (§7.4); hand-off:
+  transitions, placement (centred above the triggered monitor's middle), daemon/client CLI
+  split (§7.4); hand-off:
   [handoffs/05-m3-presentation.md](handoffs/05-m3-presentation.md).
 - **Goal:** The clock becomes a widget: time/day/date, CSS styling, fade in/out show/hide
   transitions, auto-hide timer (mouse leaves overlay/corner, debounced).
 - **Deliverables:** full clock widget (§11 layout), CSS theming, fade in/out show/hide
-  transitions, placement at the triggered monitor's top-right, auto-hide wired to
+  transitions, placement centred above the triggered monitor's middle, auto-hide wired to
   `CornerLeft`; daemon/client CLI split (§7.4): `--start`/`-s` starts the single-instance
   daemon, no-arg client sends `show` over the Unix control socket (`show`/`hide`/`toggle`,
   single-instance guard, gio async serving on the main loop); version label with interim

@@ -37,12 +37,17 @@ const CLIENT_RETRY_DELAY: Duration = Duration::from_millis(100);
 const CLIENT_READ_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Control-plane commands (proposal §7.4 baseline; the M6 `Command`
-/// registry grows this set). `show` is the default client action.
+/// registry grows this set). `show` is the default client action;
+/// `stop`/`restart` drive the daemon process itself (daemon exit /
+/// in-place re-exec), so they work with any init — no systemd unit
+/// needed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Command {
     Show,
     Hide,
     Toggle,
+    Stop,
+    Restart,
 }
 
 impl Command {
@@ -51,6 +56,8 @@ impl Command {
             Self::Show => "show",
             Self::Hide => "hide",
             Self::Toggle => "toggle",
+            Self::Stop => "stop",
+            Self::Restart => "restart",
         }
     }
 
@@ -61,6 +68,8 @@ impl Command {
             "show" => Ok(Self::Show),
             "hide" => Ok(Self::Hide),
             "toggle" => Ok(Self::Toggle),
+            "stop" => Ok(Self::Stop),
+            "restart" => Ok(Self::Restart),
             "" => Err("empty command".into()),
             other => Err(format!("unknown command '{other}'")),
         }
@@ -231,6 +240,8 @@ mod tests {
         assert_eq!(Command::parse("show"), Ok(Command::Show));
         assert_eq!(Command::parse("  hide \n"), Ok(Command::Hide));
         assert_eq!(Command::parse("toggle extra args"), Ok(Command::Toggle));
+        assert_eq!(Command::parse("stop"), Ok(Command::Stop));
+        assert_eq!(Command::parse("restart"), Ok(Command::Restart));
         assert!(Command::parse("ping").is_err());
         assert!(Command::parse("").is_err());
         assert!(Command::parse("   ").is_err());

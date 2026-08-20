@@ -89,6 +89,8 @@ extends to TCP/IP for Windows portability (`docs/proposal.md` §7.4).
 | `hover-clock` | Client — show the overlay (default command) |
 | `hover-clock show` | Same as above, explicit |
 | `hover-clock hide` / `hover-clock toggle` | Client — hide / toggle the overlay |
+| `hover-clock --stop` / `hover-clock stop` | Stop the running daemon — clean exit, control socket released |
+| `hover-clock --restart` / `hover-clock restart` | Restart the running daemon **in place** (same process id — systemd/autostart keep tracking it) |
 
 ## Install as a daemon
 
@@ -147,12 +149,17 @@ desktop session, not the init:
 
 - **systemd** (Debian/Fedora/MX with systemd boot) — `install.sh` installs a systemd
   *user* service (`~/.config/systemd/user/hover-clock.service`): auto-start at login,
-  restart on crash, clean stop/start.
+  restart on crash, clean stop/start. The unit is managed directly with
+  `systemctl --user stop|start|restart hover-clock` (e.g. `systemctl --user restart
+  hover-clock`) — **valid only on systemd installs**, where the user unit exists.
 - **sysvinit / OpenRC / runit** (MX with sysvinit boot, Devuan, antiX, Alpine, Void,
   Gentoo) — `install.sh` detects a non-systemd init and installs an **XDG autostart**
   entry (`~/.config/autostart/hover-clock.desktop`), honored by Xfce/GNOME/KDE sessions
-  regardless of init. Trade-offs: no crash-restart, and upgrading a *running* daemon
-  needs a session restart until the control plane gains a `stop` command (M6).
+  regardless of init. Trade-off: no crash-restart. There is no unit, so
+  `systemctl --user restart hover-clock` **does not work** here — stop/restart a running
+  daemon with `hover-clock --stop` / `hover-clock --restart` instead, which are
+  init-independent (they drive the daemon over its control socket, so they work on
+  every install — including systemd).
 
 ### Logs
 

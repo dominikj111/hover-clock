@@ -76,10 +76,17 @@ pub trait WindowBackend: Send + Sync {
     fn configure(&self, window: &gtk::Window);
 
     /// Position the toplevel at absolute root coordinates (M3: the
-    /// overlay appears at the triggered monitor's top-right). Best-effort
-    /// — missing platform support degrades to a no-op, never an error
-    /// (proposal §10).
+    /// overlay appears centred above the triggered monitor's middle).
+    /// Best-effort — missing platform support degrades to a no-op, never
+    /// an error (proposal §10).
     fn move_to(&self, window: &gtk::Window, x: i32, y: i32) {
         let _ = (window, x, y);
+    }
+
+    /// Query the root screen geometry, for centring the overlay before a
+    /// monitor is known. Best-effort — missing platform support degrades
+    /// to `None`, never an error (proposal §10).
+    fn screen_size(&self) -> Option<(i32, i32)> {
+        None
     }
 }

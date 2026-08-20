@@ -171,11 +171,12 @@ impl WindowBackend for X11WindowBackend {
         });
     }
 
-    /// Position the toplevel at absolute root coordinates (M3: corner
-    /// placement). Written on the backend's own connection before the
-    /// window maps, so the manager maps it at the requested position.
-    /// Best-effort: a missing surface or a non-X11 backend degrades to a
-    /// no-op.
+    /// Position the toplevel at absolute root coordinates (M3: the
+    /// overlay appears centred above the triggered monitor's middle).
+    /// Written on the backend's own connection before the window maps,
+    /// so the manager maps it at the requested position where it honours
+    /// client positions. Best-effort: a missing surface or a non-X11
+    /// backend degrades to a no-op.
     fn move_to(&self, window: &gtk::Window, x: i32, y: i32) {
         let Some(surface) = window.surface() else {
             return;
@@ -188,6 +189,21 @@ impl WindowBackend for X11WindowBackend {
             xid,
             &x11rb::protocol::xproto::ConfigureWindowAux::new().x(x).y(y),
         );
+        // ICCCM: mark the position as program-specified (USPosition) so
+        // the window manager maps the window at the requested coordinates
+        // instead of applying its own placement policy (xfwm4 re-centres
+        // windows whose client set no position hint). Best-effort.
+        let _ = write_position_hint(&self.conn, xid, x, y);
+    }
+
+    /// Query the root screen geometry, for centring before a monitor is
+    /// known. Best-effort.
+    fn screen_size(&self) -> Option<(i32, i32)> {
+        let screen = &self.conn.setup().roots[0];
+        Some((
+            screen.width_in_pixels as i32,
+            screen.height_in_pixels as i32,
+        ))
     }
 }
 
@@ -268,6 +284,43 @@ fn write_wm_hints(conn: &RustConnection, xid: u32) -> Result<(), ReplyError> {
         xid,
         AtomEnum::WM_HINTS,
         AtomEnum::WM_HINTS,
+        &hints,
+    )?
+    .check()?;
+    Ok(())
+}
+
+/// ICCCM `WM_NORMAL_HINTS`: mark the position as program-specified
+/// (USPosition) and record the requested x/y, so the window manager maps
+/// the window at the configured position instead of applying its own
+/// placement policy. Layout per ICCCM: 18 × 32-bit — [flags, x, y,
+/// width, height, min_w, min_h, max_w, max_h, w_inc, h_inc,
+/// min_aspect_num, min_aspect_den, max_aspect_num, max_aspect_den,
+/// base_w, base_h, win_gravity]; flag 0x1 = USPosition. Preserves the
+/// hints GTK wrote (min size etc.).
+fn write_position_hint(conn: &RustConnection, xid: u32, x: i32, y: i32) -> Result<(), ReplyError> {
+    let reply = conn
+        .get_property(
+            false,
+            xid,
+            AtomEnum::WM_NORMAL_HINTS,
+            AtomEnum::WM_SIZE_HINTS,
+            0,
+            18,
+        )?
+        .reply()?;
+    let mut hints = [0u32; 18];
+    for (slot, chunk) in hints.iter_mut().zip(reply.value.chunks_exact(4)) {
+        *slot = u32::from_ne_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+    }
+    hints[0] |= 0x1; // USPosition
+    hints[1] = x as u32;
+    hints[2] = y as u32;
+    conn.change_property32(
+        PropMode::REPLACE,
+        xid,
+        AtomEnum::WM_NORMAL_HINTS,
+        AtomEnum::WM_SIZE_HINTS,
         &hints,
     )?
     .check()?;
