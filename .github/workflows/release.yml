@@ -12,6 +12,8 @@ on:
 
 permissions:
   contents: write
+  # artifact upload/download in the notes <-> build jobs
+  actions: write
 
 jobs:
   guard:
@@ -35,8 +37,30 @@ jobs:
             exit 1
           fi
 
-  build:
+  # Release notes are generated ONCE here (full history) and passed to
+  # both matrix build jobs as an artifact, so the body is deterministic.
+  # Generating them inside each build job is what doubled the footer
+  # before (see the comment on the upload step).
+  notes:
     needs: guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build release notes from git history
+        run: |
+          ./scripts/release-notes.sh "$GITHUB_REF_NAME" > release-notes.md
+          echo "--- generated body ---"
+          cat release-notes.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes.md
+          if-no-files-found: error
+
+  build:
+    needs: [guard, notes]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -65,28 +89,20 @@ jobs:
           name="hover-clock-${GITHUB_REF_NAME}-${{ matrix.arch }}"
           tar czf "dist/${name}.tar.gz" -C target/release hover-clock
           sha256sum "dist/${name}.tar.gz" > "dist/${name}.tar.gz.sha256"
+      - name: Download release notes
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+          path: .release-notes/
       - name: Upload to release page
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
-          # An explicit body, not `generate_release_notes`: both matrix
-          # jobs run this step on the same release, and the second
-          # invocation regenerated/appended the notes — for a
-          # commit-only repo those are just the "Full Changelog" footer,
-          # which ended up doubled on every release page. A static body is
-          # deterministic.
-          body: |
-            ## ${{ github.ref_name }}
-
-            Transient Linux overlay daemon (GTK4, X11): a clock that surfaces on demand via
-            hot-corner dwell or `Super + T`, above fullscreen apps, without ever taking focus.
-
-            ### Install
-            ```bash
-            tar xzf hover-clock-${{ github.ref_name }}-x86_64.tar.gz -C ~/.local/bin
-            systemctl --user restart hover-clock
-            ```
-
-            System dependency: `libgtk-4-1` (Debian/Raspberry Pi OS) or `gtk4` (Fedora).
-
-            Full changelog: https://github.com/dominikj111/hover-clock/commits/${{ github.ref_name }}
+          # Real per-release notes, generated once in the `notes` job and
+          # reused verbatim by both matrix jobs (deterministic). Not
+          # `generate_release_notes`: both matrix jobs run this step on
+          # the same release, and a second invocation regenerated/appended
+          # the notes — for a commit-only repo those are just the "Full
+          # Changelog" footer, which ended up doubled on every release
+          # page (commit b408829).
+          body-path: .release-notes/release-notes.md

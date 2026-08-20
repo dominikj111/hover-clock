@@ -99,9 +99,12 @@ git push origin vX.Y.Z
 ```
 
 `.github/workflows/release.yml` then runs: a **guard** job (tag must point at main's history
-and match the `Cargo.toml` version, otherwise the run fails with a message), then release
-builds for **x86_64** and **aarch64**, producing tarballs + SHA-256 checksums uploaded to the
-GitHub release page for that tag.
+and match the `Cargo.toml` version, otherwise the run fails with a message), a **notes** job
+that generates the release body from the git history since the previous tag
+(`scripts/release-notes.sh` — commit subjects grouped by type), then release builds for
+**x86_64** and **aarch64**, producing tarballs + SHA-256 checksums uploaded to the GitHub
+release page for that tag. The notes are generated once and reused by both build jobs, so
+the body is deterministic (no doubled footer).
 
 Install from a release:
 
