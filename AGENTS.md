@@ -45,7 +45,7 @@ done and write the hand-off.
 - `cargo build` + `cargo clippy` clean (zero warnings); `cargo test` green.
 - Formatting contract is rustfmt of the MSRV toolchain: `cargo +1.92.0 fmt` (CI pins the
   Format check to 1.92.0 — rustfmt style drifts between versions).
-- Live smoke on the X session (xfwm4): corner dwell shows, `Esc` hides, `Super + T` toggles,
+- Live smoke on the X session (xfwm4): top-edge dwell shows, `Esc` hides, `Super + T` toggles,
   the active window never becomes the overlay.
 
 ## Context

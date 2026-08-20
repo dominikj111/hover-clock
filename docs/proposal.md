@@ -8,7 +8,7 @@
 
 HoverClock is a lightweight Linux overlay daemon that surfaces information — starting with a digital clock — **on demand**, via two activation methods:
 
-- **Hot-corner trigger** (mouse enters the top-right screen corner)
+- **Hot-area trigger** (mouse enters the full-width strip along the top screen edge)
 - **Global keyboard shortcut** (`Super + T` toggles the overlay)
 
 It is designed for fullscreen-first workflows where permanent panels and desktop widgets are undesirable. The overlay is **transient**, **non-focus-stealing**, and renders **above fullscreen applications**.
@@ -52,10 +52,10 @@ The daemon is **controllable over a Unix socket** by a built-in client module (w
 
 | Action | Result |
 | --- | --- |
-| Move mouse to top-right corner | Overlay appears (debounced) |
+| Move mouse to the top edge of the screen (full-width hot strip) | Overlay appears (debounced), centred above the screen's middle |
 | Press `Super + T` | Toggle overlay |
 | Press `Esc` | Hide overlay |
-| Move mouse away from the overlay/corner | Auto-hide (debounced) |
+| Move mouse away from the overlay/hot strip | Auto-hide (debounced) |
 | `Esc` + mouse left-click | Hide overlay (dismissal affordance) |
 | `hover-clock` / `hover-clock show\|hide\|toggle` (client) | Drive overlay state over the socket (`show` is the no-arg default)
 

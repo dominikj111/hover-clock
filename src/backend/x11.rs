@@ -22,7 +22,7 @@
 //!
 //! [`X11ActivationBackend`]: input activation (hot-corner, global
 //! shortcuts). Pointer motion and key presses are watched on the root
-//! window (event-driven, no polling); the hot corner is edge-triggered
+//! window (event-driven, no polling); the hot area is edge-triggered
 //! per monitor. Workspace switches are detected via the EWMH
 //! `_NET_CURRENT_DESKTOP` root property; the hot area is re-evaluated on
 //! the new workspace, so the overlay follows the pointer into the corner
@@ -320,17 +320,17 @@ mod keysym {
     pub const T: u32 = 0x0054; // XK_T
 }
 
-/// Size of the hot-area trigger region, in pixels. The default hot area
-/// is the top-right corner of each monitor (proposal §5); location and
-/// size become configurable in S05 — [`HotArea`] is the seam the config
-/// value replaces.
-const CORNER_SIZE: i32 = 4;
+/// Height of the hot-area trigger strip, in pixels. The hot area is a
+/// full-width strip along the top edge of each monitor (proposal §5);
+/// location and size become configurable in S05 — [`HotArea`] is the
+/// seam the config value replaces.
+const HOT_STRIP_HEIGHT: i32 = 4;
 
 /// The hot-area trigger region, in screen coordinates.
 ///
-/// The default is the top-right corner of a monitor. `x`/`y` are
-/// absolute so the region generalizes to any location and size relative
-/// to a monitor; S05 (config) will construct this from TOML.
+/// The default is a full-width strip along the top edge of a monitor.
+/// `x`/`y` are absolute so the region generalizes to any location and
+/// size relative to a monitor; S05 (config) will construct this from TOML.
 #[derive(Clone, Copy, Debug)]
 struct HotArea {
     x: i32,
@@ -340,12 +340,12 @@ struct HotArea {
 }
 
 impl HotArea {
-    /// The top-right `size`×`size` region of `monitor`.
-    fn top_right(monitor: Monitor, size: i32) -> Self {
+    /// The full-width `size`-tall strip along the top edge of `monitor`.
+    fn top_strip(monitor: Monitor, size: i32) -> Self {
         Self {
-            x: monitor.x + monitor.width - size,
+            x: monitor.x,
             y: monitor.y,
-            width: size,
+            width: monitor.width,
             height: size,
         }
     }
@@ -610,7 +610,7 @@ fn handle_event(
                 .monitors
                 .iter()
                 .copied()
-                .find(|m| HotArea::top_right(*m, CORNER_SIZE).contains(x, y));
+                .find(|m| HotArea::top_strip(*m, HOT_STRIP_HEIGHT).contains(x, y));
             match (state.in_corner.take(), corner) {
                 (None, Some(monitor)) => {
                     state.in_corner = Some(monitor);
@@ -662,7 +662,7 @@ fn handle_event(
                     .monitors
                     .iter()
                     .copied()
-                    .find(|m| HotArea::top_right(*m, CORNER_SIZE).contains(x, y))
+                    .find(|m| HotArea::top_strip(*m, HOT_STRIP_HEIGHT).contains(x, y))
             });
             match corner {
                 Some(monitor) => {
