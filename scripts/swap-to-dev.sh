@@ -71,6 +71,10 @@ if [ -f "$UNIT_DIR/hover-clock.service" ]; then
     service=1
     echo "==> Stopping systemd daemon"
     systemctl --user disable --now hover-clock.service 2>/dev/null || true
+    # Clear the restart counter: if the unit is ever started while the
+    # binary is stashed, Restart=on-failure would otherwise loop forever
+    # from an accumulated counter (the unit's StartLimit caps it anyway).
+    systemctl --user reset-failed hover-clock.service 2>/dev/null || true
 fi
 pkill -x hover-clock 2>/dev/null || true
 

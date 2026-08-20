@@ -132,6 +132,21 @@ dev mode. While stashed, `cargo uninstall hover-clock` cannot find the binary �
 production first. A second `swap-to-dev.sh` while dev mode is active is refused (it would
 orphan the stash); the message lists the recovery options.
 
+Two caveats, both handled by the scripts:
+
+- **Stale restore.** If a release is published (`./scripts/deploy.sh` → GitHub) while dev mode
+  is active, the stash predates it: `swap-to-prod` restores the older binary and prints a
+  prominent notice. Bring production to the release with `./scripts/upgrade.sh` (or the
+  overlay's orange update button).
+- **Start a dev session only via `swap-to-dev.sh`.** A bare `cargo run -- --start` leaves a
+  running dev process with no swap state, so `swap-to-prod` cannot restore anything — it
+  detects the stray process and prints the recovery steps (`pkill -x hover-clock`, then
+  `systemctl --user start hover-clock`).
+
+Dev-mode restart loops (unit started while the binary is stashed) are capped by the unit's
+`StartLimitIntervalSec`/`StartLimitBurst`; both swap scripts also call
+`systemctl --user reset-failed` so a stale restart counter cannot persist.
+
 ## Version label
 
 The overlay's bottom label shows the running binary's version (shadow-grey); it turns orange

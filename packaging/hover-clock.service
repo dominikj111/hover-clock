@@ -16,6 +16,11 @@
 Description=HoverClock — transient overlay daemon (clock on demand)
 After=default.target graphical-session.target
 PartOf=graphical-session.target
+# Cap restart churn: if the unit is ever started while the binary is
+# missing (dev mode — swap-to-dev stashes it), stop retrying after 5
+# failures in a minute instead of looping forever (Restart=on-failure).
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple

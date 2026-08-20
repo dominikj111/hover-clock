@@ -40,6 +40,23 @@ Read the current story card + its hand-off → the proposal §N cited on the car
 existing code before writing → smallest coherent change → validate (below) → mark the story
 done and write the hand-off.
 
+## Dev/prod swap discipline
+
+Any dev or live-testing session goes through the swap scripts — never a bare `cargo run`:
+
+1. **Before** any build/test/live-smoke work: `./scripts/swap-to-dev.sh` — stops the
+daemon, stashes the installed binary aside, runs from source. Never start a dev daemon
+(`cargo run -- --start`, `target/debug/hover-clock`) directly.
+2. **After** the session: `./scripts/swap-to-prod.sh` — restores the installed binary and
+restarts the daemon.
+
+If a `hover-clock` process is running but `~/.local/state/hover-clock/state` is absent, a dev
+session was started outside the swap scripts: stop it (`pkill -x hover-clock`), reset the
+unit (`systemctl --user reset-failed hover-clock`), and verify the installed daemon
+(`systemctl --user status hover-clock`) before continuing. If a release was published
+(`./scripts/deploy.sh`) during the dev session, `swap-to-prod` restores the stale stash and
+warns — run `./scripts/upgrade.sh` to bring production to the released version.
+
 ## Validation
 
 - `cargo build` + `cargo clippy` clean (zero warnings); `cargo test` green.
