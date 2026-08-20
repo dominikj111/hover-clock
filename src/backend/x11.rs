@@ -274,8 +274,9 @@ fn write_wm_hints(conn: &RustConnection, xid: u32) -> Result<(), ReplyError> {
         .get_property(false, xid, AtomEnum::WM_HINTS, AtomEnum::WM_HINTS, 0, 9)?
         .reply()?;
     let mut hints = [0u32; 9];
-    for (slot, chunk) in hints.iter_mut().zip(reply.value.chunks_exact(4)) {
-        *slot = u32::from_ne_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+    let (chunks, _) = reply.value.as_chunks::<4>();
+    for (slot, chunk) in hints.iter_mut().zip(chunks) {
+        *slot = u32::from_ne_bytes(*chunk);
     }
     hints[0] |= 0x1; // InputHint
     hints[1] = 0; // input = false
@@ -310,8 +311,9 @@ fn write_position_hint(conn: &RustConnection, xid: u32, x: i32, y: i32) -> Resul
         )?
         .reply()?;
     let mut hints = [0u32; 18];
-    for (slot, chunk) in hints.iter_mut().zip(reply.value.chunks_exact(4)) {
-        *slot = u32::from_ne_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+    let (chunks, _) = reply.value.as_chunks::<4>();
+    for (slot, chunk) in hints.iter_mut().zip(chunks) {
+        *slot = u32::from_ne_bytes(*chunk);
     }
     hints[0] |= 0x1; // USPosition
     hints[1] = x as u32;
