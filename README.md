@@ -207,9 +207,10 @@ declared MSRV (1.92). The compatibility record for other distributions, window m
 **Native layer-shell (M7) is live** on compositors with `zwlr_layer_shell_v1`
 (wlroots family and KWin ≥ 5.27): the overlay runs in the OVERLAY layer (stacking above
 fullscreen by construction), placement is anchor + margins, and the hot corner is a set
-of transparent 4 px top-edge sensor strips at the monitor's true top edge (an exclusive
-zone beats wlroots' free-area placement — the corner is the top 4 px, over the bar,
-parity with X11). Verified on labwc 0.9.8 (handoff 07).
+of a thin solid-dark 2 px top-edge sensor strip at the monitor's true top edge (an exclusive
+zone beats wlroots' free-area placement — the corner is the top 2 px, over the bar, parity
+with the X11 gesture; it is visible because this compositor composites layer surfaces
+opaque, see docs/wayland-layer-shell-findings.md §3). Verified on labwc 0.9.8 (handoff 07).
 
 Limits:
 - **No global shortcut on Wayland** — `ext_global_shortcuts_v1` is unmerged upstream and
@@ -217,7 +218,7 @@ Limits:
   logged warning; the corner + IPC drive the overlay (`docs/proposal.md` §16).
 - **GNOME/Mutter does not implement layer-shell** — the Xorg session is the supported
   path there (XWayland fallback keeps running, stacking degraded).
-- **Sensor strip captures its 4 px band** — clicks in the very top 4 px do not pass
+- **Sensor strip captures its 2 px band** — clicks in the very top 2 px do not pass
   through (§16 trade-off; X11 keeps the same passive corner semantics).
 
 See [`docs/WAYLAND_TESTING.md`](docs/WAYLAND_TESTING.md) for the labwc verification

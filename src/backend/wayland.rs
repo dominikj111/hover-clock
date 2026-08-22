@@ -52,14 +52,15 @@ fn monitors() -> Vec<gdk::Monitor> {
     out
 }
 
-/// Hot-corner strip height in pixels — parity with the X11 corner. The
-/// Wayland strip reaches the true top edge via its exclusive zone (see
-/// `build_strips`), so the trigger band is the top 4 px like on X11, and
-/// the user's natural "push to the top bezel" gesture lands in it (the
-/// top 4 px over the bar). Earlier attempts without the exclusive zone
-/// dropped the strip below the bar's reserved band, where 4 px was
-/// unhittable (handoff 07).
-const HOT_STRIP_HEIGHT: i32 = 4;
+/// Hot-corner strip height in pixels — near-parity with the X11 corner.
+/// The Wayland strip reaches the true top edge via its exclusive zone (see
+/// `build_strips`), so the trigger band is the top 2 px and the user's
+/// natural "push to the top bezel" gesture lands in it (over the bar).
+/// Earlier attempts without the exclusive zone dropped the strip below
+/// the bar's reserved band, where the band was unhittable (handoff 07).
+/// 2 px is the user's thinness choice: solid dark (see `build_strips`),
+/// just thick enough to aim at.
+const HOT_STRIP_HEIGHT: i32 = 2;
 
 /// Wayland implementation of [`WindowBackend`].
 ///
@@ -187,14 +188,23 @@ impl WaylandActivationBackend {
             // The strip must stay *visually* empty but still commit a
             // buffer: wlroots only delivers input to a *mapped* surface,
             // and an empty GtkWindow with transparent CSS never attaches
-            // one (commit-without-attach, handoff 07). A DrawingArea with
-            // a no-op draw func forces GTK to render a transparent ARGB
-            // buffer every frame — the compositor maps the surface, the
-            // input region (default: the whole surface) receives pointer
-            // events, and nothing is visible on screen.
+            // The strip must commit a *visible* buffer to be mapped: wlroots
+            // only delivers input to a mapped surface, and an empty
+            // GtkWindow with transparent CSS commits without attaching
+            // (no buffer -> never maps -> no input, handoff 07). True
+            // transparency is not achievable on this stack either — labwc
+            // composites layer surfaces opaque with baked alpha (a 50%%-
+            // alpha fill renders as a solid darkened band; see
+            // docs/wayland-layer-shell-findings.md §3). So the strip is a
+            // thin solid dark band: 2 px, blending with the overlay's dark
+            // styling, reading as a bezel line against light top bars.
             let holder = gtk::DrawingArea::new();
             holder.set_size_request(1, HOT_STRIP_HEIGHT);
-            holder.set_draw_func(|_, _cr, _w, _h| {});
+            holder.set_draw_func(|_, cr, w, h| {
+                cr.set_source_rgb(0.05, 0.05, 0.05);
+                cr.rectangle(0.0, 0.0, w as f64, h as f64);
+                let _ = cr.fill();
+            });
             strip.set_child(Some(&holder));
 
             strip.init_layer_shell();
@@ -210,13 +220,15 @@ impl WaylandActivationBackend {
             strip.set_anchor(Edge::Left, true);
             strip.set_anchor(Edge::Right, true);
             strip.set_anchor(Edge::Top, true);
-            // Exclusive zone 4: this places the strip in the layer's
-            // *exclusive* area, i.e. at the output's true top edge (y0–3,
-            // over the top bar) instead of the free area below reserved
-            // chrome (y36 — handoff 07). The 4 px reservation is invisible
-            // in practice: nothing else lives in the OVERLAY exclusive
-            // area, and the clock overlay is non-exclusive (free area).
-            strip.set_exclusive_zone(4);
+            // Exclusive zone equal to the strip height: this places the
+            // strip in the layer's *exclusive* area, i.e. at the output's
+            // true top edge (y0–1) instead of the free area below reserved
+            // chrome (handoff 07). The PIXEL bar also lives in the OVERLAY
+            // exclusive area, so the reservation shifts the bar down by
+            // exactly the strip height — keeping zone == height means the
+            // strip fills its own reservation and no desktop gap appears
+            // (a taller zone showed a black band between strip and bar).
+            strip.set_exclusive_zone(HOT_STRIP_HEIGHT);
             strip.set_keyboard_mode(KeyboardMode::None);
             strip.set_monitor(Some(&monitor));
 
