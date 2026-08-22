@@ -54,10 +54,10 @@ Expected (verified on labwc 0.9.8, handoff 07):
   global-shortcut protocol on Wayland and are unavailable; the hot corner is the
   trigger and corner-leave auto-hide the dismissal (IPC `show`/`hide`/`toggle` also
   drive the overlay).
-- Dwell the pointer on the **top 12 px of the content area** (the strip sits below any
-  reserved top bar — on Pi OS, just under the PIXEL bar's bottom edge): the clock fades
-  in centred above the monitor's middle (OVERLAY layer, above everything). Move away: it
-  auto-hides after ~250 ms. The strip band captures clicks there (documented, §16).
+- Dwell the pointer on the **top 4 px of the screen** (the strip sits at the monitor's
+  true top edge, above any bar, via its exclusive zone): the clock fades in centred
+  above the monitor's middle (OVERLAY layer, above everything). Move away: it auto-hides
+  after ~250 ms. The strip band captures clicks there (documented, §16).
 - The overlay never takes focus (keyboard mode NONE) and never reserves workspace
   (no exclusive zone); stacking above fullscreen apps is compositor-guaranteed.
 

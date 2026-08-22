@@ -9,9 +9,12 @@
 //! transparent 4 px top-strip layer surface per output. Wayland has no
 //! global pointer-position API (proposal §15), so the strip *is* its own
 //! input region: enter/leave crossing events fire when the pointer
-//! reaches the monitor's top edge. Consequence, documented in §16: the
-//! strip captures clicks in that 4 px band — the pointer never passes
-//! through to the window below it.
+//! reaches the monitor's top edge. The strip is placed at the true top
+//! edge via an exclusive zone (wlroots free-area placement would drop it
+//! below any reserved chrome) and forced to map with a DrawingArea buffer
+//! (an empty transparent window never attaches one). Consequence,
+//! documented in §16: the strip captures clicks in that 4 px band — the
+//! pointer never passes through to the window below it.
 //!
 //! Global shortcuts (`Super + T`, `Esc`) have no portable protocol on
 //! Wayland as of M7 (proposal §16 decision): `ext_global_shortcuts_v1` is
@@ -49,15 +52,14 @@ fn monitors() -> Vec<gdk::Monitor> {
     out
 }
 
-/// Hot-corner strip height in pixels — the Wayland corner is an input-
-/// capturing band, so it needs to be hittable: on desktops with a top
-/// bar the strip sits at the top of the *content* area (below the bar's
-/// reserved band, wlroots free-area placement) and 4 px proved too thin
-/// to aim at blind (handoff 07). 12 px is a compromise: reachable, yet
-/// only the top 12 px of the content area is captured. The X11 corner
-/// stays 4 px — it watches motion passively (monitor-absolute), so no
-/// aiming precision is needed there.
-const HOT_STRIP_HEIGHT: i32 = 12;
+/// Hot-corner strip height in pixels — parity with the X11 corner. The
+/// Wayland strip reaches the true top edge via its exclusive zone (see
+/// `build_strips`), so the trigger band is the top 4 px like on X11, and
+/// the user's natural "push to the top bezel" gesture lands in it (the
+/// top 4 px over the bar). Earlier attempts without the exclusive zone
+/// dropped the strip below the bar's reserved band, where 4 px was
+/// unhittable (handoff 07).
+const HOT_STRIP_HEIGHT: i32 = 4;
 
 /// Wayland implementation of [`WindowBackend`].
 ///
@@ -182,27 +184,39 @@ impl WaylandActivationBackend {
             let r = monitor.geometry();
             let strip = gtk::Window::new();
             strip.set_decorated(false);
-            // Force the strip height: an empty window has no natural size,
-            // and a 0 px surface would have no input region.
-            let holder = gtk::Box::new(gtk::Orientation::Vertical, 0);
+            // The strip must stay *visually* empty but still commit a
+            // buffer: wlroots only delivers input to a *mapped* surface,
+            // and an empty GtkWindow with transparent CSS never attaches
+            // one (commit-without-attach, handoff 07). A DrawingArea with
+            // a no-op draw func forces GTK to render a transparent ARGB
+            // buffer every frame — the compositor maps the surface, the
+            // input region (default: the whole surface) receives pointer
+            // events, and nothing is visible on screen.
+            let holder = gtk::DrawingArea::new();
             holder.set_size_request(1, HOT_STRIP_HEIGHT);
+            holder.set_draw_func(|_, _cr, _w, _h| {});
             strip.set_child(Some(&holder));
 
             strip.init_layer_shell();
             strip.set_namespace(Some("hover-clock"));
-            // OVERLAY layer. Placement note (proposal §16): wlroots places
-            // a non-exclusive surface in the layer's *free* area, so the
-            // strip sits at the top of the content area — below any
-            // reserved chrome (e.g. the Pi OS PIXEL bar's 36 px band) —
-            // never at the raw output edge. That is the correct Wayland
-            // semantic: the corner triggers at the top of what the user
-            // can interact with; overlaying the bar's band would steal its
-            // input. The X11 corner keeps monitor-absolute semantics.
+            // OVERLAY layer — the topmost layer, so the strip sits above
+            // any bar and above fullscreen content (parity with the X11
+            // corner, which watches motion globally). Placement (proposal
+            // §16): without an exclusive zone, wlroots puts a top-anchored
+            // surface in the layer's *free* area — below reserved chrome
+            // (the Pi OS PIXEL bar reserves ~36 px) — which is why the
+            // strip needs the exclusive zone below to reach the true edge.
             strip.set_layer(Layer::Overlay);
             strip.set_anchor(Edge::Left, true);
             strip.set_anchor(Edge::Right, true);
             strip.set_anchor(Edge::Top, true);
-            strip.set_exclusive_zone(0);
+            // Exclusive zone 4: this places the strip in the layer's
+            // *exclusive* area, i.e. at the output's true top edge (y0–3,
+            // over the top bar) instead of the free area below reserved
+            // chrome (y36 — handoff 07). The 4 px reservation is invisible
+            // in practice: nothing else lives in the OVERLAY exclusive
+            // area, and the clock overlay is non-exclusive (free area).
+            strip.set_exclusive_zone(4);
             strip.set_keyboard_mode(KeyboardMode::None);
             strip.set_monitor(Some(&monitor));
 

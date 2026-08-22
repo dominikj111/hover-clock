@@ -126,10 +126,12 @@ widget)**. Packaging: daemon autostart fixed for DEs that never raise
 - **Status:** ✅ 2026-08-22 — layer-shell `WindowBackend` + hot-corner strip
   `ActivationBackend` landed behind the existing contracts, verified live on labwc 0.9.8
   (native Wayland, the labwc session on this Pi) with a physical pointer: the corner is
-  the top 12 px of the content area (below the PIXEL bar's reserved band — wlroots free-
-  area placement, §16), overlay maps in OVERLAY layer, placement anchor+margin. `Super+T`/
-  `Esc` degrade to a logged warning (no portable global-shortcut protocol — §16
-  decision). Single binary, one artifact per arch (no X11/Wayland split, §16). Hand-off:
+  the **top 4 px of the monitor's true top edge** — the strip carries an exclusive zone
+  (beats wlroots' free-area placement below the PIXEL bar's reserved band) and a
+  DrawingArea-forced transparent buffer (an empty transparent window never maps),
+  overlay in OVERLAY layer, placement anchor+margin. `Super+T`/`Esc` degrade to a logged
+  warning (no portable global-shortcut protocol — §16 decision). Single binary, one
+  artifact per arch (no X11/Wayland split, §16). Hand-off:
   [handoffs/07-m7-wayland.md](handoffs/07-m7-wayland.md).
 - **Goal:** Wayland layer-shell backend behind the existing `WindowBackend` /
   `ActivationBackend` contracts.
