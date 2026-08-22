@@ -40,9 +40,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            pkg-config libgtk-4-dev
+            pkg-config libgtk-4-dev libgtk4-layer-shell-dev
       - name: Build
         run: cargo build --locked
+      - name: Build without the Wayland feature (X11-only gate)
+        run: cargo build --locked --no-default-features
       - name: Clippy (zero warnings)
         run: cargo clippy --all-targets -- -D warnings
       - name: Test

@@ -34,23 +34,35 @@ echo $WAYLAND_DISPLAY    # → wayland-0
 |-----|------|
 | kitty, Firefox (≥ 121), recent Chrome | native Wayland |
 | Thunar, other GTK3 / X11-only apps | XWayland (labwc auto-starts it) |
-| HoverClock current X11 build | XWayland — runs with *degraded* stacking (§17.3) |
+| HoverClock (post-M7) | native Wayland — layer-shell overlay (stacking above fullscreen), hot-corner strips; Super+T/Esc degraded (§16). The XWayland fallback path is kept |
+| HoverClock current X11 build (pre-M7) | XWayland — runs with *degraded* stacking (§17.3) |
 
 GTK4 apps run native Wayland by default; force explicitly with
 `GDK_BACKEND=wayland`.
 
-## Baseline smoke of the current build (before M7)
+## Smoke after M7 (native layer-shell on labwc)
 
-In the labwc session:
+In the labwc session, from a terminal (`Super+Return` → foot):
 
 ```bash
-cargo run -- -s
+cd <repo> && cargo run -- -s
 ```
 
-Expected per §17.3: activation works (XWayland synthesizes root motion, key
-grabs pass through), stacking degraded (overlay never above native Wayland
-fullscreen surfaces), workspace tracking unavailable and degrading
-gracefully. That is the XWayland baseline M7 replaces.
+Expected (verified on labwc 0.9.8, handoff 07):
+
+- The daemon logs the §16 degradation warning once — `Super+T`/`Esc` have no portable
+  global-shortcut protocol on Wayland and are unavailable; the hot corner is the
+  trigger and corner-leave auto-hide the dismissal (IPC `show`/`hide`/`toggle` also
+  drive the overlay).
+- Dwell the pointer on the **top 12 px of the content area** (the strip sits below any
+  reserved top bar — on Pi OS, just under the PIXEL bar's bottom edge): the clock fades
+  in centred above the monitor's middle (OVERLAY layer, above everything). Move away: it
+  auto-hides after ~250 ms. The strip band captures clicks there (documented, §16).
+- The overlay never takes focus (keyboard mode NONE) and never reserves workspace
+  (no exclusive zone); stacking above fullscreen apps is compositor-guaranteed.
+
+Baseline check of the *X11* path (unchanged): run the same binary in an X11 session
+(xfwm4) — hot corner, `Super+T`, `Esc`, taskbar invisibility as before.
 
 ## Caveats
 
@@ -58,8 +70,14 @@ gracefully. That is the XWayland baseline M7 replaces.
   `Super+Return` (foot) or fuzzel.
 - **Screenshots**: use `grim` + `slurp` — XFCE screenshot tools do not work
   on Wayland.
-- **No X11 global shortcuts**: the M7 `ActivationBackend` uses the native
-  global-shortcuts protocol, not X key grabs.
+- **No global shortcuts on labwc**: the M7 `ActivationBackend` has no shortcut source —
+  `ext_global_shortcuts_v1` is unmerged upstream and labwc does not advertise it
+  (proposal §16). `Super+T`/`Esc` degrade with a logged warning; corner + IPC only.
+  XWayland key grabs would work for keys labwc does not bind, but are the X11
+  mechanism — deliberately not used (WAYLAND_TESTING.md commitment).
+- **Pointer injection for testing does not work**: labwc/wlroots does not forward
+  XWayland pointer warps (XTEST/XWarpPointer) to the Wayland seat — verify corner
+  behaviour with a physical pointer.
 - If GTK theming looks wrong: `sudo apt install xdg-desktop-portal-gtk
   xdg-desktop-portal-wlr`.
 - X11 remains the daily driver and the primary smoke-test surface (xfwm4);

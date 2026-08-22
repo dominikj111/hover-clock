@@ -6,7 +6,7 @@ mod version;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use backend::{ActivationBackend, ActivationEvent, WindowBackend};
+use backend::ActivationEvent;
 use chrono::Local;
 use clap::Parser;
 use gtk::{glib, prelude::*};
@@ -353,28 +353,24 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
     };
     glib::timeout_add_seconds_local(60 * 60, refresh);
 
-    // M1: apply overlay semantics (EWMH hints, non-focusable window type).
-    // Configured at realize time — before the window maps — so the window
-    // manager reads the hints when it manages the window. Degrades to a
-    // logged warning when X11 is unavailable. Shared with the
-    // OverlayController, which needs it for placement (M3).
-    let window_backend: Option<Rc<backend::X11WindowBackend>> =
-        match backend::X11WindowBackend::new() {
-            Ok(backend) => {
-                let backend = Rc::new(backend);
-                let realize_backend = Rc::clone(&backend);
-                window
-                    .connect_realize(move |window| realize_backend.configure(window.upcast_ref()));
-                Some(backend)
-            }
-            Err(err) => {
-                glib::g_warning!(
-                    "hover-clock",
-                    "X11 window backend unavailable; overlay behavior disabled: {err}"
-                );
-                None
-            }
-        };
+    // Backend selection (proposal §10): native Wayland layer-shell when
+    // the display supports it, X11 otherwise (also under XWayland, where
+    // layer-shell is unavailable and the overlay keeps the §17.3 degraded
+    // stacking). Absence degrades to a logged warning and a plain window,
+    // never a crash.
+    let (window_backend, activation): backend::Backends = backend::build_backends();
+
+    // M1: apply overlay semantics before the window maps. The X11 hints
+    // are written at realize time (EWMH — the surface must exist); the
+    // layer-shell conversion must be requested before realize (the
+    // library hooks the realize signal internally). `prepare` covers the
+    // pre-realize step, `configure` the realize step — each backend
+    // implements what its platform needs and ignores the other.
+    if let Some(window_backend) = &window_backend {
+        let realize_backend = Rc::clone(window_backend);
+        window.connect_realize(move |window| realize_backend.configure(window.upcast_ref()));
+        window_backend.prepare(window.upcast_ref());
+    }
 
     // M3: realize once up front (GTK's own path — `gtk_widget_realize`,
     // not `gtk_native_realize` directly) so the X surface exists for
@@ -389,29 +385,10 @@ fn build_ui(application: &gtk::Application, control_service: gio::SocketService)
     gtk::prelude::WidgetExt::realize(&window);
 
     // M2: activation. The overlay starts hidden and surfaces on demand
-    // (hot corner, Super+T); Esc dismisses. Backend failures degrade to
-    // the M1 behavior: overlay always visible, warning logged.
+    // (hot corner, Super+T); Esc dismisses. The factory constructed and
+    // started the backend; failures there already degraded to the M1
+    // behavior (overlay always visible, warning logged).
     let window = Rc::new(window);
-    let activation: Option<Rc<backend::X11ActivationBackend>> =
-        match backend::X11ActivationBackend::new() {
-            Ok(backend) => {
-                let backend = Rc::new(backend);
-                match backend.start() {
-                    Ok(()) => Some(backend),
-                    Err(err) => {
-                        glib::g_warning!(
-                            "hover-clock",
-                            "activation unavailable, overlay stays visible: {err}"
-                        );
-                        None
-                    }
-                }
-            }
-            Err(err) => {
-                glib::g_warning!("hover-clock", "X11 activation backend unavailable: {err}");
-                None
-            }
-        };
 
     match &activation {
         Some(backend) => {
@@ -736,10 +713,10 @@ fn cancel_overlay_timers(
 /// fade animation and the last-known hot-area monitor.
 struct OverlayController {
     window: Rc<gtk::ApplicationWindow>,
-    backend: Rc<backend::X11ActivationBackend>,
-    /// X11 window backend for placement; `None` when the overlay
-    /// hints backend is unavailable (placement degrades to GTK default).
-    window_backend: Option<Rc<backend::X11WindowBackend>>,
+    backend: Rc<dyn backend::ActivationBackend>,
+    /// Window backend for placement; `None` when the platform backend is
+    /// unavailable (placement degrades to GTK default).
+    window_backend: Option<Rc<dyn backend::WindowBackend>>,
     /// Last monitor whose hot area was entered (`CornerEntered` carries
     /// the geometry; `Toggle` does not — it places on the last one).
     monitor: RefCell<Option<backend::Monitor>>,
@@ -753,8 +730,8 @@ struct OverlayController {
 impl OverlayController {
     fn new(
         window: Rc<gtk::ApplicationWindow>,
-        backend: Rc<backend::X11ActivationBackend>,
-        window_backend: Option<Rc<backend::X11WindowBackend>>,
+        backend: Rc<dyn backend::ActivationBackend>,
+        window_backend: Option<Rc<dyn backend::WindowBackend>>,
         size: (i32, i32),
     ) -> Rc<Self> {
         Rc::new(Self {
@@ -864,7 +841,7 @@ impl OverlayController {
     /// the animation completes. Replaces any in-flight fade.
     fn fade_to<F>(&self, to: f64, on_done: F)
     where
-        F: Fn(&gtk::ApplicationWindow, &Rc<backend::X11ActivationBackend>) + 'static,
+        F: Fn(&gtk::ApplicationWindow, &Rc<dyn backend::ActivationBackend>) + 'static,
     {
         self.cancel_fade();
         let start = self.window.opacity();

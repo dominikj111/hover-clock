@@ -263,7 +263,14 @@ plus: do not request focus; use a non-focusable window type (`_NET_WM_WINDOW_TYP
 
 ### 9.2 Wayland (layer-shell)
 
-[gtk4-layer-shell-rs](https://github.com/wmww/gtk4-layer-shell) is the intended target. Layer-shell was created precisely for panels, launchers, overlays, OSD widgets, and notification systems — exactly HoverClock's use case.
+[gtk4-layer-shell-rs](https://github.com/wmww/gtk4-layer-shell) is the implementation (M7,
+landed): the overlay is a `zwlr_layer_shell_v1` surface in the **OVERLAY layer** (the
+protocol's topmost layer — designed for OSDs/notifications), keyboard mode NONE (never
+takes focus), exclusive zone 0 (never reserves workspace). Placement is layer-shell
+anchor + margins relative to the target output (the X11 `move_to` coordinate hack is not
+needed); the surface is switched to the triggered output before each show. Stacking above
+fullscreen apps is compositor-guaranteed — no EWMH hints exist on Wayland. GNOME/Mutter
+does not implement layer-shell (§17.3).
 
 ## 10. Backend Abstraction
 
@@ -271,12 +278,12 @@ All system-level interaction passes through explicit trait boundaries, **registe
 
 | Contract (trait) | X11 implementation | Wayland implementation |
 | --- | --- | --- |
-| `ActivationBackend` | Hot-corner + global shortcut (X11) | Pointer/global shortcut (Wayland) |
-| `WindowBackend` | EWMH window hints | Layer-shell surface |
+| `ActivationBackend` | Hot-corner + global shortcut (X11) | Hot-corner strips (top-edge layer surfaces, M7); global shortcut unavailable — see §16 |
+| `WindowBackend` | EWMH window hints | Layer-shell surface (M7) |
 | `TimeSource` | System clock (`chrono::Local`) | System clock (shared) |
 | `IpcServer` | Unix socket listener (shared) | Unix socket listener (shared) |
 
-Consumers resolve these via the registry; absence of a backend degrades to a disabled overlay with a logged warning (never a crash).
+Consumers resolve these via the registry; absence of a backend degrades to a disabled overlay with a logged warning (never a crash). Runtime selection landed at M7: `backend::build_backends()` (session-level — the registry formalisation is M5).
 
 ## 11. Widget System
 
@@ -370,8 +377,12 @@ Later, widgets may be driven over the socket (data plane) — a widget contract
 
 ## 15. Open Questions
 
+Resolved at M7 are marked **→ decided (§16)**.
+
 - Hot-corner geometry on multi-monitor setups: all monitors or primary only?
+  **→ decided (§16)**: one strip per output, like X11.
 - Wayland hot-corner detection strategy (pointer constraints / global position APIs).
+  **→ decided (§16)**: input-region top strips (no global pointer API exists).
 - Debounce, auto-hide, and fade in/out timing values (defaults + configurability).
 - Overlay placement: fixed corner vs. follows pointer corner?
 - Socket path/ownership: `$XDG_RUNTIME_DIR` vs `/tmp`; socket permissions (0600?).
@@ -380,6 +391,7 @@ Later, widgets may be driven over the socket (data plane) — a widget contract
 - Async runtime choice for IPC: tokio bridged to the GTK main loop vs glib IO watch only.
 - Whether `Esc` alone is sufficient vs. `Esc` + left-click dismissal semantics on Wayland.
 - Layer-shell anchor/layer choice (`OVERLAY` vs. `TOP`) for stacking above fullscreen.
+  **→ decided (§16)**: `OVERLAY` for the overlay, `TOP` for the sensor strips.
 
 ## 16. Decision Log
 
@@ -392,6 +404,11 @@ Later, widgets may be driven over the socket (data plane) — a widget contract
 | Early stage | **Adopt JigsawFlow pattern + `singleton-registry`** | Flat capability registry, trait contracts, offline-first, graceful degradation, facade-wrapped dependencies — matches the overlay-daemon shape and keeps it extensible. |
 | Early stage | **Daemon/client command pattern (workmeshd-inspired)** | Single binary, dual mode; Unix socket control plane with `Command` trait registry; proven pattern for controlling a long-lived daemon. |
 | 2026-08 | **State/render split** — widgets own state and produce a widget tree via `view()`; the renderer is a swappable adapter behind a `RenderBackend` contract (JigsawFlow rendering facade §6.1) | GTK stays replaceable (Qt/egui) without touching application flow; matches the shell-family pattern (Weaver egui shell, iced-shell) |
+| 2026-08 (M7) | **Wayland hot corner = input-region top strips** — one transparent 12 px top-edge layer surface per output; enter/leave crossing events are the corner trigger | Wayland has no global pointer-position API (§15); the strip *is* its own input region. Height 12 px (not the X11 4 px) because the Wayland corner is an input-capturing band that must be hittable blind below a reserved bar band — 4 px proved unhittable in live testing (handoff 07). Trade-off: the strip captures clicks in its band — the pointer never passes through there (acceptable on the TV/testing surfaces; X11 keeps the passive corner) |
+| 2026-08 (M7) | **Layer choice: `OVERLAY` for both overlay and sensor strips** | Overlay must float above fullscreen apps (OVERLAY is the protocol's topmost layer). Strips also use OVERLAY — and wlroots places a non-exclusive surface in the layer's *free* area, so the corner lands at the top of the content area, below reserved chrome (the Pi OS PIXEL bar reserves the top 36 px). That is the correct Wayland semantic: the corner triggers where the user can interact; overlaying the bar's band would steal its input. The X11 corner keeps monitor-absolute top-edge semantics |
+| 2026-08 (M7) | **Wayland global shortcut: not implemented — degrades to a logged warning** | `ext_global_shortcuts_v1` is an unmerged upstream MR (not in wayland-protocols); the GlobalShortcuts portal has no wlroots backend and labwc does not advertise either — nothing portable to implement against or verify on (M7 test surface). `Super+T`/`Esc` are corner-leave auto-hide + IPC on Wayland. Revisit when a protocol lands upstream or a portal backend ships |
+| 2026-08 (M7) | **Placement = layer-shell anchor + margins; `move_to` reinterprets absolute coords per output** | Layer-shell has no absolute positioning; the surface follows the triggered output via `set_monitor` before each map, offset expressed as margins. GDK logical pixels throughout the Wayland path (X11 reports physical — the paths never mix) |
+| 2026-08 (M7) | **One binary, one artifact per arch — no X11/Wayland split** | Measured: the max droppable backend code is 112 KB (`x11rb`) of a 4.08 MB binary — the runtime is GTK-dominated (11 MB, both backends internal, not strippable per-app). A split would double the release matrix, force install-time session selection (wrong for machines that boot both sessions — e.g. this Pi) and version lockstep, for ~2.7% binary savings. The `wayland` feature gate already gives X11-only builders the lean build. If a Wayland-only target ever needs it, add an `x11` feature (default-on) instead of splitting releases |
 
 ## 17. Compatibility & Portability
 
@@ -404,6 +421,10 @@ decisions explicit; macOS/Windows are *ports behind the facade contracts* (§10)
   system library. Build deps: `pkg-config` + GTK4 dev headers (`libgtk-4-dev` on
   Debian/Pi OS, `gtk4-devel` on Fedora) + Rust toolchain. ARM (Raspberry Pi) builds
   natively; the GL renderer via Mesa fits the §13 footprint targets.
+- **M7 adds the layer-shell system library:** the `wayland` cargo feature (default-on)
+  links `gtk4-layer-shell` (pkg-config `gtk4-layer-shell-0`) — `libgtk4-layer-shell-dev`
+  on Debian/Pi OS trixie (unavailable on bookworm; use `--no-default-features` there).
+  X11-only builds can drop the feature: `cargo build --no-default-features`.
 - **GTK version floor:** `gtk4-rs 0.11` builds against GTK ≥ 4.0; the crate enables no
   version-gated feature and uses only base APIs (CSS via `load_from_data`, the 4.0-era
   equivalent of the 4.12-only `load_from_string`). Debian 12 / Raspberry Pi OS bookworm
@@ -450,13 +471,14 @@ login via `pam_systemd` (GDM/lightdm/SDDM all do this), so the daemon connects a
 
 ### 17.3 Wayland
 
-- **Current build under XWayland (any Wayland session):** activation works (XWayland
-  synthesizes XI2 root motion; key grabs pass through for keys the compositor does not
-  intercept), but stacking is degraded — the overlay sits inside the XWayland layer and
-  is *never* above native Wayland fullscreen surfaces. Workspace tracking is unavailable
-  (no `_NET_CURRENT_DESKTOP` under XWayland) and degrades gracefully.
-- **M7 layer-shell covers:** wlroots compositors (sway, Hyprland, labwc — including the
-  Raspberry Pi OS Wayland preview) and KWin (Plasma ≥ 5.27).
+- **M7 (layer-shell) landed:** on compositors with `zwlr_layer_shell_v1` (wlroots family —
+  labwc, sway, Hyprland — and KWin ≥ 5.27) the overlay runs native: OVERLAY layer (above
+  fullscreen by construction), placement via anchor + margins, hot corner via 12 px input-
+  region top strips. Super+T/Esc degrade (no portable global-shortcut protocol, §16).
+  Verified on labwc 0.9.8 (handoff 07).
+- **XWayland fallback (unchanged):** when layer-shell is unavailable (GNOME Wayland,
+  XWayland sessions) the factory falls back to the X11 backends — activation works,
+  stacking degraded, warnings logged (§10 degradation doctrine).
 - **Mutter (GNOME) does not implement layer-shell and exposes no public alternative** →
   GNOME Wayland is unreachable for the overlay-above-fullscreen requirement; the Xorg
   session is the supported path there.
@@ -494,8 +516,9 @@ Already portable: GTK4 Quartz backend, `chrono`, gio main loop, Unix-socket IPC 
 
 ### 17.6 Portability architecture notes
 
-- §10 facades + M5 runtime backend selection are the porting seam; `src/main.rs` still
-  hard-wires X11 today.
+- §10 facades + M5 runtime backend selection are the porting seam; `src/main.rs` now
+  selects the session backend through `backend::build_backends()` (M7) instead of
+  hard-wiring X11.
 - `WindowBackend::configure` is GTK-typed — constrains the native macOS panel path;
   resolve at port time.
 - IPC transport is not yet abstracted (M6); the §15 socket/framing questions double as

@@ -18,7 +18,9 @@ check + click-to-update button, §11.2/S09) and the M3 presentation finish: fade
 transitions and placement (centred above the triggered monitor's middle) — **S04 and S09
 delivered** (hand-offs
 `05-m3-presentation.md`, `06-s09-version-update.md`); release flow live (v1.0.0–v1.2.0,
-`just deploy`). **Next: S05 (M4 Calendar widget)**. Packaging: daemon autostart fixed for DEs that never raise
+`just deploy`). **S08 (M7 Wayland) delivered** — layer-shell overlay + hot-corner strips,
+verified native on labwc 0.9.8 (hand-off `07-m7-wayland.md`). **Next: S05 (M4 Calendar
+widget)**. Packaging: daemon autostart fixed for DEs that never raise
 `graphical-session.target` (xfce on MX Linux — unit now wanted by `default.target` too); see
 [handoffs/04-autostart-fix.md](handoffs/04-autostart-fix.md).
 
@@ -119,9 +121,16 @@ delivered** (hand-offs
 - **Design refs:** §7, §12, §15 (socket path/ownership, framing, transport evolution)
 - **Hand-off:** pending
 
-### S08 — M7 Wayland ⬜
+### S08 — M7 Wayland ✅ 2026-08-22
 
-- **Status:** ⬜ backlog
+- **Status:** ✅ 2026-08-22 — layer-shell `WindowBackend` + hot-corner strip
+  `ActivationBackend` landed behind the existing contracts, verified live on labwc 0.9.8
+  (native Wayland, the labwc session on this Pi) with a physical pointer: the corner is
+  the top 12 px of the content area (below the PIXEL bar's reserved band — wlroots free-
+  area placement, §16), overlay maps in OVERLAY layer, placement anchor+margin. `Super+T`/
+  `Esc` degrade to a logged warning (no portable global-shortcut protocol — §16
+  decision). Single binary, one artifact per arch (no X11/Wayland split, §16). Hand-off:
+  [handoffs/07-m7-wayland.md](handoffs/07-m7-wayland.md).
 - **Goal:** Wayland layer-shell backend behind the existing `WindowBackend` /
   `ActivationBackend` contracts.
 - **Deliverables:** layer-shell `WindowBackend`; pointer/shortcut `ActivationBackend`.
@@ -131,7 +140,7 @@ delivered** (hand-offs
   disappears by construction; layer-shell **anchoring** (top-right + margins) also replaces
   the X11 placement hack natively. GNOME/Mutter does not implement layer-shell (§17.3).
 - **Design refs:** §10, §15 (layer-shell anchor/layer choice)
-- **Hand-off:** pending
+- **Hand-off:** [07-m7-wayland.md](handoffs/07-m7-wayland.md)
 
 ### S09 — Version notification widget ✅ 2026-08-17
 

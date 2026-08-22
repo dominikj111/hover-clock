@@ -4,9 +4,84 @@
 //! backend lands behind the same contracts at M6. Business logic never
 //! touches system APIs directly — it goes through these facades.
 
+#[cfg(feature = "wayland")]
+mod wayland;
 mod x11;
 
+#[cfg(feature = "wayland")]
+pub use wayland::{WaylandActivationBackend, WaylandWindowBackend};
 pub use x11::{X11ActivationBackend, X11WindowBackend};
+
+use gtk::glib;
+use std::rc::Rc;
+
+/// The platform backend pair for the current session: window behavior +
+/// input activation (proposal §10).
+pub type Backends = (
+    Option<Rc<dyn WindowBackend>>,
+    Option<Rc<dyn ActivationBackend>>,
+);
+
+/// Construct the platform backends for the current session (proposal §10).
+///
+/// Native Wayland (layer-shell) wins when the display supports it;
+/// X11 otherwise — including under XWayland, where layer-shell is
+/// unavailable and the overlay keeps the §17.3 degraded stacking.
+/// Missing platform support degrades to `None` with a logged warning
+/// (the overlay then runs as a plain window), never a crash.
+pub fn build_backends() -> Backends {
+    #[cfg(feature = "wayland")]
+    if gtk4_layer_shell::is_supported() {
+        let activation = match WaylandActivationBackend::new().and_then(|backend| {
+            backend.start()?;
+            Ok(backend)
+        }) {
+            Ok(backend) => backend,
+            Err(err) => {
+                glib::g_warning!(
+                    "hover-clock",
+                    "Wayland activation backend unavailable; overlay stays hidden: {err}"
+                );
+                return (
+                    Some(Rc::new(WaylandWindowBackend) as Rc<dyn WindowBackend>),
+                    None,
+                );
+            }
+        };
+        return (
+            Some(Rc::new(WaylandWindowBackend) as Rc<dyn WindowBackend>),
+            Some(Rc::new(activation) as Rc<dyn ActivationBackend>),
+        );
+    }
+
+    let window_backend = match X11WindowBackend::new() {
+        Ok(backend) => Some(Rc::new(backend) as Rc<dyn WindowBackend>),
+        Err(err) => {
+            glib::g_warning!(
+                "hover-clock",
+                "X11 window backend unavailable; overlay behavior disabled: {err}"
+            );
+            None
+        }
+    };
+    let activation = match X11ActivationBackend::new() {
+        Ok(backend) => match backend.start() {
+            Ok(()) => Some(Rc::new(backend) as Rc<dyn ActivationBackend>),
+            Err(err) => {
+                glib::g_warning!(
+                    "hover-clock",
+                    "activation unavailable, overlay stays visible: {err}"
+                );
+                None
+            }
+        },
+        Err(err) => {
+            glib::g_warning!("hover-clock", "X11 activation backend unavailable: {err}");
+            None
+        }
+    };
+    (window_backend, activation)
+}
 
 /// A monitor (output) in physical pixel coordinates.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,6 +134,14 @@ pub trait ActivationBackend {
     /// Reflect overlay visibility so dismissal keys are only grabbed
     /// while the overlay is shown.
     fn set_overlay_visible(&self, visible: bool);
+
+    /// Wire `dispatch` to the platform event pump. Called once, right
+    /// after [`Self::start`]; every activation event is reported exactly
+    /// once through `dispatch` (edge-triggered).
+    fn install_event_source(
+        &self,
+        dispatch: Box<dyn Fn(ActivationEvent) + 'static>,
+    ) -> Result<(), String>;
 }
 
 /// Contract for platform-specific overlay window behavior.
@@ -68,6 +151,14 @@ pub trait ActivationBackend {
 /// (proposal §9). Missing platform support must degrade to a logged
 /// warning, never a crash.
 pub trait WindowBackend: Send + Sync {
+    /// Prepare the toplevel before it is realized. Platform setup that
+    /// must precede surface creation goes here — the layer-shell backend
+    /// turns the window into a layer surface at realize, so its setup
+    /// hooks the realize signal internally and must run first. Default:
+    /// nothing to do (X11 applies its hints at realize, in
+    /// [`Self::configure`]).
+    fn prepare(&self, _window: &gtk::Window) {}
+
     /// Apply overlay semantics to a toplevel window.
     ///
     /// Callers invoke this after the window has a surface (e.g. after

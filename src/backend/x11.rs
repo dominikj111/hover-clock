@@ -445,40 +445,6 @@ impl X11ActivationBackend {
             state: Rc::new(RefCell::new(ActivationState::default())),
         })
     }
-
-    /// Install a glib source that drains X events on the main context and
-    /// dispatches them to `dispatch`. The source watches a dup of the X
-    /// connection fd, so events arrive without polling.
-    pub fn install_event_source(
-        &self,
-        dispatch: Box<dyn Fn(ActivationEvent) + 'static>,
-    ) -> Result<glib::SourceId, String> {
-        // gio takes ownership of its fd; hand it a dup so x11rb keeps its own.
-        let fd = self.conn.stream().as_raw_fd();
-        let dup_fd = unsafe { std::os::fd::BorrowedFd::borrow_raw(fd) }
-            .try_clone_to_owned()
-            .map_err(|err| format!("dup() of X11 connection fd failed: {err}"))?;
-        let socket = gio::Socket::from_fd(dup_fd)
-            .map_err(|err| format!("gio socket for X11 connection failed: {err}"))?;
-
-        let conn = Arc::clone(&self.conn);
-        let root = self.root;
-        let state = Rc::clone(&self.state);
-        let source = gio::prelude::SocketExtManual::create_source(
-            &socket,
-            glib::IOCondition::IN,
-            None::<&gio::Cancellable>,
-            Some("hover-clock-x11-activation"),
-            glib::Priority::DEFAULT,
-            move |_, _| {
-                for event in poll_events(&conn, root, &state) {
-                    dispatch(event);
-                }
-                glib::ControlFlow::Continue
-            },
-        );
-        Ok(source.attach(None))
-    }
 }
 
 impl ActivationBackend for X11ActivationBackend {
@@ -625,6 +591,38 @@ impl ActivationBackend for X11ActivationBackend {
             }
         }
         let _ = self.conn.flush();
+    }
+
+    fn install_event_source(
+        &self,
+        dispatch: Box<dyn Fn(ActivationEvent) + 'static>,
+    ) -> Result<(), String> {
+        // gio takes ownership of its fd; hand it a dup so x11rb keeps its own.
+        let fd = self.conn.stream().as_raw_fd();
+        let dup_fd = unsafe { std::os::fd::BorrowedFd::borrow_raw(fd) }
+            .try_clone_to_owned()
+            .map_err(|err| format!("dup() of X11 connection fd failed: {err}"))?;
+        let socket = gio::Socket::from_fd(dup_fd)
+            .map_err(|err| format!("gio socket for X11 connection failed: {err}"))?;
+
+        let conn = Arc::clone(&self.conn);
+        let root = self.root;
+        let state = Rc::clone(&self.state);
+        let source = gio::prelude::SocketExtManual::create_source(
+            &socket,
+            glib::IOCondition::IN,
+            None::<&gio::Cancellable>,
+            Some("hover-clock-x11-activation"),
+            glib::Priority::DEFAULT,
+            move |_, _| {
+                for event in poll_events(&conn, root, &state) {
+                    dispatch(event);
+                }
+                glib::ControlFlow::Continue
+            },
+        );
+        source.attach(None);
+        Ok(())
     }
 }
 

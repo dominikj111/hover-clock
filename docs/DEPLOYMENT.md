@@ -7,10 +7,14 @@ daemon is a **session** process (X11, never root).
 
 ## Requirements
 
-- Linux with an **X11 session** (Wayland planned; the X11 build runs under XWayland with
-  degraded stacking on Wayland sessions).
+- Linux with an **X11 session or a layer-shell Wayland compositor** (wlroots family /
+  KWin ≥ 5.27). The XWayland fallback keeps running on other Wayland sessions with
+  degraded stacking.
 - GTK4 runtime: `libgtk-4-1` (Debian / Raspberry Pi OS), `gtk4` (Fedora/Arch). Builds need
   the dev headers (`libgtk-4-dev`, `gtk4-devel`, `pkg-config`).
+- **M7 build dep (default-on `wayland` feature):** `libgtk4-layer-shell-dev` on
+  Debian 13 / Pi OS trixie (pkg-config `gtk4-layer-shell-0`). Bookworm and other distros
+  without the package: `cargo build --no-default-features` for the X11-only build.
 - Rust ≥ 1.92 to build from source (declared MSRV, enforced in CI).
 
 ## Build

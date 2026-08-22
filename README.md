@@ -3,8 +3,8 @@
 [![CI](https://github.com/dominikj111/hover-clock/actions/workflows/ci.yml/badge.svg)](https://github.com/dominikj111/hover-clock/actions/workflows/ci.yml)
 [![MSRV](https://img.shields.io/badge/MSRV-1.92-purple)](https://github.com/dominikj111/hover-clock/blob/main/Cargo.toml)
 [![GTK](https://img.shields.io/badge/GTK-4.0%2B-green)](https://github.com/dominikj111/hover-clock/blob/main/Cargo.toml)
-[![Platform](https://img.shields.io/badge/platform-Linux%20(X11)-blue)](#tested-environments)
-[![Wayland](https://img.shields.io/badge/Wayland-planned-yellow)](#wayland-status)
+[![Platform](https://img.shields.io/badge/platform-Linux%20(X11%20%2B%20Wayland)-blue)](#tested-environments)
+[![Wayland](https://img.shields.io/badge/Wayland-native-green)](#wayland-status)
 [![License](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE)
 
 A transient Linux overlay daemon that surfaces widgets on demand — starting with a digital
@@ -12,13 +12,12 @@ clock — via hot-corner or global shortcut, above fullscreen applications, with
 taking focus.
 
 - **Non-focus-stealing** — invisible to task switchers, never takes input focus
-- **Above fullscreen apps** — EWMH overlay semantics (`NOTIFICATION` type, `ABOVE`,
-  `SKIP_TASKBAR`/`SKIP_PAGER`)
-- **Event-driven, no polling** — XI2 pointer motion, passive key grabs, edge-triggered and
+- **Above fullscreen apps** — X11: EWMH overlay semantics (`NOTIFICATION` type, `ABOVE`, `SKIP_TASKBAR`/`SKIP_PAGER`); Wayland: layer-shell OVERLAY layer
+- **Event-driven, no polling** — XI2 pointer motion (X11) / top-edge sensor strips (Wayland), passive key grabs, edge-triggered and
   debounced triggers
 - **Single GTK4 binary** — offline-first, minimal footprint (< 25 MB, < 0.1% idle CPU
   targets)
-- **X11 first, Wayland planned** — layer-shell backend behind the same trait facades
+- **X11 + native Wayland** — layer-shell backend behind the same trait facades
 
 ## Status
 
@@ -29,15 +28,20 @@ plan.
 
 ## Requirements
 
-- Linux with an **X11 session** (Wayland planned — see [Wayland status](#wayland-status))
+- Linux with an **X11 session, or a Wayland session on a layer-shell compositor**
+  (wlroots family — labwc, sway, Hyprland — or KWin ≥ 5.27; see [Wayland status](#wayland-status))
 - **Rust ≥ 1.92** (stable; edition 2024)
 - **GTK4 development libraries** — install per distribution, then verify:
 
 | Distribution | Command |
 | --- | --- |
-| Debian / Raspberry Pi OS / MX Linux | `sudo apt install -y libgtk-4-dev pkg-config` |
+| Debian 13 / Raspberry Pi OS (trixie) | `sudo apt install -y libgtk-4-dev libgtk4-layer-shell-dev pkg-config` |
+| Debian 12 / Pi OS bookworm (no layer-shell pkg) | `sudo apt install -y libgtk-4-dev pkg-config && cargo build --no-default-features` |
 | Fedora | `sudo dnf install -y gtk4-devel pkgconf-pkg-config` |
 | Arch | `sudo pacman -S gtk4 pkg-config` |
+
+> The `wayland` cargo feature (default-on) links the system `libgtk4-layer-shell`;
+> `--no-default-features` drops it for X11-only builds.
 
 Verify with `pkg-config --modversion gtk4` before building.
 
@@ -192,7 +196,7 @@ untouched, so the repo is always ready for `cargo run`.
 | --- | --- |
 | Debian GNU/Linux 13 (trixie), Xfce 4.20 (xfce4-session 4.20.2), libgtk-4-1 4.18.6+ds-2 | ✅ |
 | MX Linux (trixie-based), Xfce 4.20 | ✅ |
-| Raspberry Pi 4 Model B Rev 1.4 (aarch64), trixie-based Pi OS (GTK 4.18.6) | ⚠️ builds & runs; Wayland session → activation degraded (hot-corner/shortcut), see §17.3 — use the X11 session for full behavior |
+| Raspberry Pi 4 Model B Rev 1.4 (aarch64), trixie-based Pi OS (GTK 4.18.6) | ✅ X11 (xfwm4); ⚠️ Wayland (labwc 0.9.8) — native layer-shell overlay + corner verified (M7, handoff 07); Super+T/Esc degraded (no portable shortcut protocol, §16) |
 
 CI additionally builds and lints on `ubuntu-latest` with the stable toolchain and the
 declared MSRV (1.92). The compatibility record for other distributions, window managers
@@ -200,11 +204,24 @@ declared MSRV (1.92). The compatibility record for other distributions, window m
 
 ## Wayland status
 
-The current X11 build runs under XWayland on Wayland sessions: activation works, but
-stacking is degraded — the overlay cannot float above *native* Wayland fullscreen windows.
-A layer-shell backend (M7) is planned; note that Mutter/GNOME does not implement
-layer-shell, so GNOME Wayland is out of reach — use the Xorg session there
-(`docs/proposal.md` §17.3).
+**Native layer-shell (M7) is live** on compositors with `zwlr_layer_shell_v1`
+(wlroots family and KWin ≥ 5.27): the overlay runs in the OVERLAY layer (stacking above
+fullscreen by construction), placement is anchor + margins, and the hot corner is a set
+of transparent 12 px top-edge sensor strips at the top of the content area (below any
+reserved chrome, e.g. the PIXEL bar). Verified on labwc 0.9.8 (handoff 07).
+
+Limits:
+- **No global shortcut on Wayland** — `ext_global_shortcuts_v1` is unmerged upstream and
+  the GlobalShortcuts portal has no wlroots backend, so `Super+T`/`Esc` degrade to a
+  logged warning; the corner + IPC drive the overlay (`docs/proposal.md` §16).
+- **GNOME/Mutter does not implement layer-shell** — the Xorg session is the supported
+  path there (XWayland fallback keeps running, stacking degraded).
+- **Sensor strip captures its 12 px band** — clicks in that band do not pass through
+  (§16 trade-off; X11 keeps the passive 4 px corner). On desktops with a top bar, the band
+  sits just below the bar (the bar owns the raw top edge).
+
+See [`docs/WAYLAND_TESTING.md`](docs/WAYLAND_TESTING.md) for the labwc verification
+surface and [`docs/proposal.md`](docs/proposal.md) §17.3.
 
 ## Third-party examples
 

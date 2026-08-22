@@ -13,7 +13,16 @@ clap = { version = "4", features = ["derive"] }
 gdk4-x11 = "0.11.4"
 gio = "0.22"
 gtk = { version = "0.11.4", package = "gtk4" }
+gtk4-layer-shell = { version = "0.8.1", optional = true }
 sha2 = "0.10"
 ureq = { version = "2", default-features = false, features = ["tls"] }
 x11rb = { version = "0.14.0", features = ["randr", "xinput"] }
+
+# `wayland` is default-on so a stock build gets the native layer-shell
+# backend (M7). It needs the system `libgtk4-layer-shell` (pkg-config
+# `gtk4-layer-shell-0`); machines without it can `--no-default-features`
+# to keep the X11-only build (proposal §17.1).
+[features]
+default = ["wayland"]
+wayland = ["dep:gtk4-layer-shell"]
 
