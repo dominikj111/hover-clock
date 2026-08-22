@@ -71,11 +71,22 @@ Baseline check of the *X11* path (unchanged): run the same binary in an X11 sess
   `Super+Return` (foot) or fuzzel.
 - **Screenshots**: use `grim` + `slurp` — XFCE screenshot tools do not work
   on Wayland.
-- **No global shortcuts on labwc**: the M7 `ActivationBackend` has no shortcut source —
-  `ext_global_shortcuts_v1` is unmerged upstream and labwc does not advertise it
-  (proposal §16). `Super+T`/`Esc` degrade with a logged warning; corner + IPC only.
-  XWayland key grabs would work for keys labwc does not bind, but are the X11
-  mechanism — deliberately not used (WAYLAND_TESTING.md commitment).
+- **No app-side global shortcuts on Wayland**: `ext_global_shortcuts_v1` is unmerged
+  upstream and the GlobalShortcuts portal has no wlroots backend; XWayland key grabs
+  only see keys while an X11 app is focused. The compositor owns global keys — bind them
+  in the compositor config to the `hover-clock` client:
+
+  ```xml
+  <!-- labwc ~/.config/labwc/rc.xml (merge-enabled; reload: kill -HUP $(pgrep labwc)) -->
+  <keyboard>
+    <keybind key="W-T"><action name="Execute"><command>hover-clock toggle</command></action></keybind>
+    <keybind key="Escape"><action name="Execute"><command>hover-clock hide</command></action></keybind>
+  </keyboard>
+  ```
+
+  (sway: `bindsym $mod+t exec hover-clock toggle`; Hyprland: `bind = SUPER, T, exec,
+  hover-clock toggle`). `command` resolves on PATH — use an absolute path in dev mode
+  while the installed binary is stashed.
 - **Pointer injection for testing does not work**: labwc/wlroots does not forward
   XWayland pointer warps (XTEST/XWarpPointer) to the Wayland seat — verify corner
   behaviour with a physical pointer.

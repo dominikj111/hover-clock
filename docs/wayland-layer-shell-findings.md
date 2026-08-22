@@ -110,17 +110,33 @@ with no extra calls — and **clicks in the band do not pass through** to whatev
 passive motion-watching; the Wayland strip necessarily captures its band. Keep the band
 thin.
 
-## 6. Global shortcuts: nothing portable exists yet
+## 6. Global shortcuts: the compositor owns them — app-side does not exist
 
 - `ext_global_shortcuts_v1` (KDE's proposal) is an **unmerged upstream MR** — absent from
   wayland-protocols staging and stable, absent from labwc 0.9.8 (verified by strings on the
   binary and the repo tree).
 - The `org.freedesktop.portal.GlobalShortcuts` portal has **no wlroots backend**;
   xdg-desktop-portal-wlr implements Screenshot/ScreenCast only.
+- **XWayland key grabs are a dead end**: passive grabs on the X root only receive keys
+  while an **X11** app has keyboard focus. With a native Wayland app focused, the
+  compositor routes keys straight to the app — verified live (Win+T typed "t" into the
+  focused app).
 
-So `Super+T` / `Esc` have no implementation target on this compositor. They degrade to a
-logged warning; corner + IPC drive the overlay. Revisit when the protocol or a portal
-backend lands.
+So the app cannot register global keys on Wayland, period. The mechanism that works is the
+**compositor keybind**: labwc binds keys in `rc.xml` (merge-enabled; `kill -HUP` reloads)
+to run the `hover-clock` client, which drives the daemon over its control socket:
+
+```xml
+<keyboard>
+  <keybind key="W-T"><action name="Execute"><command>hover-clock toggle</command></action></keybind>
+  <keybind key="Escape"><action name="Execute"><command>hover-clock hide</command></action></keybind>
+</keyboard>
+```
+
+The compositor intercepts the key before any app (native Wayland or X11), so it works
+universally and never steals focus. Equivalent on other compositors: sway `bindsym`,
+Hyprland `bind`, KWin shortcuts. The client command is the portable interface; the bind
+is per-compositor config.
 
 ## 7. Testing reality: XWayland pointer injection does not reach the Wayland seat
 
@@ -170,5 +186,6 @@ serves X11-only builders (`--no-default-features`).
   an opaque EGL config for the layer surface — test on sway/Hyprland/KWin when available.
 - `set_monitor` switching pre-map and per-output strips: implemented, untested with a
   second monitor.
-- Global-shortcut path: revisit when `ext_global_shortcuts_v1` lands upstream or a
+- Global-shortcut path: compositor keybinds are the working mechanism (per-compositor
+  config); revisit app-side when `ext_global_shortcuts_v1` lands upstream or a
   GlobalShortcuts portal backend ships.

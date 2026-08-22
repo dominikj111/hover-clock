@@ -196,7 +196,7 @@ untouched, so the repo is always ready for `cargo run`.
 | --- | --- |
 | Debian GNU/Linux 13 (trixie), Xfce 4.20 (xfce4-session 4.20.2), libgtk-4-1 4.18.6+ds-2 | ✅ |
 | MX Linux (trixie-based), Xfce 4.20 | ✅ |
-| Raspberry Pi 4 Model B Rev 1.4 (aarch64), trixie-based Pi OS (GTK 4.18.6) | ✅ X11 (xfwm4); ⚠️ Wayland (labwc 0.9.8) — native layer-shell overlay + corner verified (M7, handoff 07); Super+T/Esc degraded (no portable shortcut protocol, §16) |
+| Raspberry Pi 4 Model B Rev 1.4 (aarch64), trixie-based Pi OS (GTK 4.18.6) | ✅ X11 (xfwm4); ⚠️ Wayland (labwc 0.9.8) — native layer-shell overlay + corner verified (M7, handoff 07); Super+T/Esc via labwc rc.xml keybinds → `hover-clock` client (compositor-native) |
 
 CI additionally builds and lints on `ubuntu-latest` with the stable toolchain and the
 declared MSRV (1.92). The compatibility record for other distributions, window managers
@@ -213,9 +213,11 @@ with the X11 gesture; it is visible because this compositor composites layer sur
 opaque, see docs/wayland-layer-shell-findings.md §3). Verified on labwc 0.9.8 (handoff 07).
 
 Limits:
-- **No global shortcut on Wayland** — `ext_global_shortcuts_v1` is unmerged upstream and
-  the GlobalShortcuts portal has no wlroots backend, so `Super+T`/`Esc` degrade to a
-  logged warning; the corner + IPC drive the overlay (`docs/proposal.md` §16).
+- **Global shortcuts are compositor-configured on Wayland** — no app-side global-shortcut
+  API exists (`ext_global_shortcuts_v1` unmerged; portal without wlroots backend; XWayland
+  grabs only see X-focused apps). Bind them in the compositor config to the client:
+  labwc rc.xml `W-T`→`hover-clock toggle`, `Escape`→`hover-clock hide` (see
+  `docs/WAYLAND_TESTING.md`); sway/Hyprland equivalents. Verified on labwc 0.9.8.
 - **GNOME/Mutter does not implement layer-shell** — the Xorg session is the supported
   path there (XWayland fallback keeps running, stacking degraded).
 - **Sensor strip captures its 2 px band** — clicks in the very top 2 px do not pass

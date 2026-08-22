@@ -130,8 +130,9 @@ widget)**. Packaging: daemon autostart fixed for DEs that never raise
   (beats wlroots' free-area placement below the PIXEL bar's reserved band), a
   DrawingArea-forced buffer (an empty transparent window never maps), and a solid dark
   fill (labwc composites layer surfaces opaque — no true transparency; see
-  docs/wayland-layer-shell-findings.md), overlay in OVERLAY layer, placement anchor+margin. `Super+T`/`Esc` degrade to a logged
-  warning (no portable global-shortcut protocol — §16 decision). Single binary, one
+  docs/wayland-layer-shell-findings.md), overlay in OVERLAY layer, placement anchor+margin. `Super+T`/`Esc`
+  work via labwc rc.xml keybinds → `hover-clock` client (compositor-native; app-side
+  global shortcuts don't exist on Wayland — §16). Single binary, one
   artifact per arch (no X11/Wayland split, §16). Hand-off:
   [handoffs/07-m7-wayland.md](handoffs/07-m7-wayland.md).
 - **Goal:** Wayland layer-shell backend behind the existing `WindowBackend` /

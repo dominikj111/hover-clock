@@ -37,13 +37,17 @@ user's direction.
 
 ## What was done differently
 
-1. **No global shortcut — degraded, not implemented.** `ext_global_shortcuts_v1` is an
-   **unmerged upstream MR** (verified: absent from wayland-protocols staging and stable;
-   absent from labwc 0.9.8). The GlobalShortcuts portal has no wlroots backend.
-   `Super+T`/`Esc` degrade to a logged warning; corner + IPC drive the overlay (§16).
-   The plan promised ext_global_shortcuts via wayland-client — the protocol target
-   vanished; per minimalism + verified-references, the shortcut was dropped rather than
-   vendoring an unstable MR protocol. Revisit when it lands upstream.
+1. **Global shortcut: compositor keybind, not app-side.** No portable app-side
+   global-shortcut API exists: `ext_global_shortcuts_v1` is an **unmerged upstream MR**
+   (verified: absent from wayland-protocols staging/stable and from labwc 0.9.8); the
+   GlobalShortcuts portal has no wlroots backend. An XWayland key-grab attempt was
+   implemented and then **reverted after live testing**: passive X grabs only see keys
+   while an *X11* app is focused — with a native Wayland app focused the compositor
+   routes the key straight to the app (Win+T typed "t" into the focused app). The
+   working mechanism is the **compositor keybind**: labwc rc.xml binds `W-T`/`Escape` to
+   the `hover-clock` client (`toggle`/`hide` via the control socket), intercepting keys
+   before any app. Per-compositor config; the client command is the portable interface.
+   The app-side degradation warning remains for compositors without a configured bind.
 2. **Strip placement discovery (the corner bug).** wlroots places a non-exclusive layer
    surface in the layer's *free* area: with the Pi OS PIXEL bar (`wf-panel-pi`,
    ~36 px exclusive band at the top) a plain top-anchored strip landed at y36, not y0 —
@@ -94,6 +98,9 @@ user's direction.
   top edge (over the PIXEL bar) → clock fades in; auto-hide on leave confirmed. The
   red-probe strips (24 px, 12 px) and the final exclusive-zone strip all fired; the
   transparent strip without a buffer did not (see §3 above).
+- **Shortcuts verified with the labwc keybinds** (user): Win+T toggles, Esc hides, over
+  any focused app (compositor intercepts before delivery). XWayland key grabs failed
+  live (keys delivered to native-Wayland-focused apps) and were reverted.
 - Auto-hide on leaving the band: exercised via the same crossing path (leave → debounced
   hide), same dispatch code as the verified show.
 
