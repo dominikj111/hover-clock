@@ -77,4 +77,5 @@ emit Fixes "${fix[@]}"
 emit Other "${other[@]}"
 echo "Full changelog: https://github.com/dominikj111/hover-clock/commits/$TAG"
 echo
-echo "Install & usage: see the [README](https://github.com/dominikj111/hover-clock#readme)."
+echo "Install: \`curl -fsSL https://raw.githubusercontent.com/dominikj111/hover-clock/main/scripts/install-release.sh | sh\`"
+echo "Usage: see the [README](https://github.com/dominikj111/hover-clock#readme)."

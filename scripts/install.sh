@@ -89,7 +89,7 @@ if [ "$(ps -p 1 -o comm= 2>/dev/null)" = "systemd" ]; then
     mkdir -p "$UNIT_DIR"
     install -m 644 packaging/hover-clock.service "$UNIT_DIR/hover-clock.service"
     systemctl --user daemon-reload
-    systemctl --user import-environment DISPLAY XAUTHORITY 2>/dev/null || true
+    systemctl --user import-environment DISPLAY XAUTHORITY WAYLAND_DISPLAY 2>/dev/null || true
     echo "==> Registering and starting the daemon"
     systemctl --user enable hover-clock.service
     # `restart`, not `enable --now`: --now only starts a *stopped* unit —

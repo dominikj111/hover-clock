@@ -52,6 +52,10 @@ toggle:
 install:
     ./scripts/install.sh
 
+# Download the latest release binary (curl|sh path) — no build.
+install-release:
+    ./scripts/install-release.sh
+
 upgrade *args="":
     ./scripts/upgrade.sh {{args}}
 
