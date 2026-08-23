@@ -7,12 +7,14 @@ story is done only when confirmed implemented (acceptance met + verification per
 ## Current state
 
 One binary, one branch: X11 (xfwm4-verified) and **native Wayland** (layer-shell, labwc
-0.9.8-verified) run from the same build — **M7 merged to main**, releasing as **v2.0.0**
-(major bump for the new platform support, S11). Overlay hidden until triggered; shows on
+0.9.8-verified) run from the same build — **M7 merged to main**, released as **v2.0.1**
+(major bump for the new platform support, S11; v2.0.0's own release run died on the
+Ubuntu apt step — no `libgtk4-layer-shell-dev` on noble — fixed in CI by building the
+library from source). Overlay hidden until triggered; shows on
 top-edge dwell (200 ms debounced) or `Super + T` (compositor-keybound on Wayland), dismisses
 on `Esc`, never takes focus, invisible to task switchers, auto-hides (debounced) on
 hot-area leave; clock widget (time/day/date), version label with GitHub-release check, fade
-in/out, centred placement. **Next: S05 (M4 — Calendar widget)**. Packaging: daemon
+in/out, centred placement. **Next: S12 (`--upgrade` CLI)** — then S05 (M4 — Calendar widget). Packaging: daemon
 autostart fixed for DEs that never raise `graphical-session.target` (xfce on MX Linux —
 unit now wanted by `default.target` too); curl|sh release installer live
 (`scripts/install-release.sh`, S11).
@@ -179,13 +181,13 @@ unit now wanted by `default.target` too); curl|sh release installer live
 - **Hand-off:** pending
 - **Hand-off:** pending
 
-### S11 — v2.0.0 release & installer ⬜ 2026-08-23
+### S11 — v2.0.0 release & installer ✅ 2026-08-23
 
-- **Status:** ⬜ prep done — M7 (Wayland) merged to main; README/DEPLOYMENT/AGENTS updated so
-  X11 and Wayland are equally covered; curl|sh release installer live
-  (`scripts/install-release.sh`, smoke-tested against the v1.3.1 release assets: arch
-  detection, runtime-dep check, checksum verification, install). Tag `v2.0.0` (via
-  `./scripts/deploy.sh 2.0.0`) to publish.
+- **Status:** ✅ 2026-08-23 — released as **v2.0.1** (v2.0.0's own release run failed at the
+  Ubuntu apt step — no `libgtk4-layer-shell-dev` package on noble; CI now builds the C
+  library from source, and the release page pipeline got fixed in the same cycle:
+  `body_path` input name + themed `## vX.Y.Z — <theme>` header via `deploy.sh`'s optional
+  theme arg).
 - **Goal:** major release for the merged Wayland support, plus a zero-toolchain install path.
 - **Deliverables:** `install-release.sh` (binary from GitHub Releases, SHA-256 verified,
   daemon registration: systemd user unit / XDG autostart, runtime-dep check);
@@ -193,6 +195,26 @@ unit now wanted by `default.target` too); curl|sh release installer live
   instances, registration, binaries, socket, state — repo untouched); docs coverage
   for X11 + Wayland; `v2.0.0` tag.
 - **Design refs:** README Install, `docs/DEPLOYMENT.md` Delivery options
+- **Hand-off:** pending
+
+### S12 — `--upgrade` CLI (self-upgrade from the terminal) ⬜
+
+- **Status:** ⬜ backlog — next immediate story
+- **Goal:** Trigger the S09 self-upgrade without the widget's click button:
+  `hover-clock --upgrade` (alias `upgrade`) takes the installed binary to the newest
+  release from any terminal — the version label (S09) stays as the "update available"
+  signal, the CLI as the action.
+- **Deliverables:** `--upgrade` flag + positional `upgrade` command (same convention as
+  `--stop`/`stop`, `--restart`/`restart`); client sends the command over the control
+  socket; daemon runs the existing S09 upgrade path (GitHub releases check → tarball
+  download → SHA-256 verify → binary swap → in-place restart); clear output for
+  already-latest / offline / daemon-not-running; widget button kept (discoverability).
+- **Acceptance:** `hover-clock --upgrade` upgrades a stale install end-to-end and reports
+  the new version; already-latest and offline exit with an explanatory message, never a
+  crash; works with the overlay never shown.
+- **Note:** complements `scripts/upgrade.sh` (source installs — pull + rebuild); the CLI
+  covers release-binary installs (the S09 path).
+- **Design refs:** §7.1 (CLI primary surface), §7.4 (control socket), S09 (existing upgrade path)
 - **Hand-off:** pending
 
 ## Later (private exploration)
