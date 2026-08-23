@@ -226,9 +226,9 @@ untouched, so the repo is always ready for `cargo run`.
 
 | Environment | Status |
 | --- | --- |
-| Debian GNU/Linux 13 (trixie), Xfce 4.20 (xfce4-session 4.20.2), libgtk-4-1 4.18.6+ds-2 | ✅ |
-| MX Linux (trixie-based), Xfce 4.20 | ✅ |
-| Raspberry Pi 4 Model B Rev 1.4 (aarch64), trixie-based Pi OS (GTK 4.18.6) | ✅ X11 (xfwm4); ⚠️ Wayland (labwc 0.9.8) — native layer-shell overlay + corner verified (M7, handoff 07); Super+T/Esc via labwc rc.xml keybinds → `hover-clock` client (compositor-native) |
+| Debian GNU/Linux 13 (trixie), Xfce 4.20 (xfce4-session 4.20.2), systemd, X11 (libgtk-4-1 4.18.6+ds-2) | ✅ |
+| MX Linux (trixie-based), Xfce 4.20, systemd boot, X11 | ✅ |
+| Raspberry Pi 4 Model B Rev 1.4 (aarch64), trixie-based Pi OS, PIXEL desktop, systemd | ✅ X11 (xfwm4) · ✅ Wayland (labwc 0.9.8) — native layer-shell overlay + hot corner verified (M7, handoff 07); Super+T/Esc via labwc rc.xml keybinds → `hover-clock` client (compositor-native); caveats in [Wayland status](#wayland-status) |
 
 CI additionally builds and lints on `ubuntu-latest` with the stable toolchain and the
 declared MSRV (1.92). The compatibility record for other distributions, window managers
@@ -246,9 +246,10 @@ opaque, see docs/wayland-layer-shell-findings.md §3). Verified on labwc 0.9.8 (
 
 **No multi-desktop (workspace) dependency.** Layer-shell surfaces are not workspace-bound —
 a workspace switch never touches the overlay (by construction; the X11 xfwm4 re-map
-flicker disappears). Verified on the two extremes: Raspberry Pi OS / labwc, which has no
-multi-desktop support at all, and MX Linux / Xfce, which does — the same build behaves
-identically on both.
+flicker disappears). The missing multi-desktop is a **Raspberry Pi OS characteristic** — its
+labwc session ships without workspaces — not a Wayland or labwc limitation (labwc supports
+workspaces on other systems). Verified on the two extremes: Pi OS (no workspaces at all) and
+MX Linux / Xfce (workspaces) — the same build behaves identically on both.
 
 Limits:
 - **Global shortcuts are compositor-configured on Wayland** — no app-side global-shortcut

@@ -30,7 +30,8 @@ pending (`./scripts/deploy.sh 2.0.0`).
   one-liner + path table + "why no cargo install" note; "Install as a daemon" → "Lifecycle
   scripts"; Releases semver line fixed (`0.x` was stale); version-label example bumped;
   **Wayland status gained the no-multi-desktop paragraph** (layer-shell surfaces are not
-  workspace-bound — RPi OS/labwc has no workspaces, MX/Xfce does, same build on both; the
+  workspace-bound; the missing multi-desktop is a Raspberry Pi OS characteristic, not a
+  Wayland/labwc limitation — Pi OS has no workspaces, MX/Xfce does, same build on both; the
   observation the user asked to record).
 - docs/DEPLOYMENT.md — Requirements split into runtime-libs-for-release-binaries vs
   build-deps (bookworm: release binaries won't run — X11-only source build); **Install**
