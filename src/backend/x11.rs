@@ -34,7 +34,7 @@
 use std::cell::RefCell;
 use std::os::fd::AsRawFd;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use gtk::gdk;
 use gtk::glib;
@@ -77,6 +77,10 @@ unsafe extern "C" {
 pub struct X11WindowBackend {
     conn: Arc<RustConnection>,
     root: u32,
+    /// Last position requested via [`Self::move_to`], re-applied after
+    /// every map (see [`Self::configure`]). `Mutex`, not `RefCell` — the
+    /// `WindowBackend: Send + Sync` bound forbids `RefCell`.
+    last_pos: Arc<Mutex<Option<(i32, i32)>>>,
 }
 
 impl X11WindowBackend {
@@ -87,6 +91,7 @@ impl X11WindowBackend {
         Ok(Self {
             conn: Arc::new(conn),
             root,
+            last_pos: Arc::new(Mutex::new(None)),
         })
     }
 }
@@ -144,21 +149,32 @@ impl WindowBackend for X11WindowBackend {
 
         // Post-map: GTK rewrites WM_HINTS when showing the surface, and the
         // manager takes ownership of _NET_WM_STATE once managed. Re-apply on
-        // every map (also covers later show/hide cycles).
+        // every map (also covers later show/hide cycles) — and re-assert the
+        // requested position. The latter is the first-show fix: the pre-map
+        // USPosition write (move_to) can be dropped by GDK's size-hints path
+        // (`XSetWMNormalHints`) before the WM's first-manage read, so the WM
+        // would apply its own placement (smart → 0,0). Re-applying after the
+        // map lands the window at the requested position like every re-map
+        // (which the WM keeps as client geometry). Invisible: the overlay
+        // maps at opacity 0 and fades in, and the correction runs in the
+        // same main-loop iteration as the map, before the first paint.
         let conn = Arc::clone(&self.conn);
         let root = self.root;
+        let last_pos = Arc::clone(&self.last_pos);
         surface.connect_mapped_notify(move |surface| {
             if !surface.is_mapped() {
                 return;
             }
             let conn = Arc::clone(&conn);
             let atoms = atoms.clone();
+            let last_pos = Arc::clone(&last_pos);
             if let Err(err) = post_map_hints(&conn, root, xid, &atoms) {
                 glib::g_warning!(
                     "hover-clock",
                     "X11 backend: failed to re-apply overlay hints: {err}"
                 );
             }
+            reapply_position(&conn, xid, &last_pos);
             // The manager may still be finishing manage; retry once.
             glib::timeout_add_local_once(std::time::Duration::from_millis(300), move || {
                 if let Err(err) = post_map_hints(&conn, root, xid, &atoms) {
@@ -167,6 +183,7 @@ impl WindowBackend for X11WindowBackend {
                         "X11 backend: failed to re-apply overlay hints: {err}"
                     );
                 }
+                reapply_position(&conn, xid, &last_pos);
             });
         });
     }
@@ -175,8 +192,11 @@ impl WindowBackend for X11WindowBackend {
     /// overlay appears centred above the triggered monitor's middle).
     /// Written on the backend's own connection before the window maps,
     /// so the manager maps it at the requested position where it honours
-    /// client positions. Best-effort: a missing surface or a non-X11
-    /// backend degrades to a no-op.
+    /// client positions. Remembered and re-applied after every map (see
+    /// [`Self::configure`]) — the pre-map USPosition write alone loses a
+    /// race on the first map (GDK's size-hints rewrite can drop it before
+    /// the WM's first-manage read). Best-effort: a missing surface or a
+    /// non-X11 backend degrades to a no-op.
     fn move_to(&self, window: &gtk::Window, x: i32, y: i32) {
         let Some(surface) = window.surface() else {
             return;
@@ -185,6 +205,7 @@ impl WindowBackend for X11WindowBackend {
             return;
         };
         let xid = x11_surface.xid() as u32;
+        *self.last_pos.lock().unwrap() = Some((x, y));
         let _ = self.conn.configure_window(
             xid,
             &x11rb::protocol::xproto::ConfigureWindowAux::new().x(x).y(y),
@@ -194,6 +215,25 @@ impl WindowBackend for X11WindowBackend {
         // instead of applying its own placement policy (xfwm4 re-centres
         // windows whose client set no position hint). Best-effort.
         let _ = write_position_hint(&self.conn, xid, x, y);
+
+        // Every show is a fresh WM manage (hide withdraws the window, so
+        // the next map re-frames it), and the WM's placement at that
+        // manage can override the pre-map write when USPosition is lost
+        // (see `reapply_position`). The mapped signal is not a reliable
+        // hook here — GDK queues the hide's mapped=false to an idle and
+        // the show's mapped=true in the same tick cancels it, so no mapped
+        // transition fires on re-shows. Instead, a repeating position
+        // guard (`start_settle`) verifies the actual root position and
+        // re-asserts on mismatch until it sticks — a busy WM that places
+        // late is corrected by the next iteration, and the chain stops as
+        // soon as the position matches (or the window hides). No-op while
+        // correct.
+        start_settle(
+            Arc::clone(&self.conn),
+            self.root,
+            xid,
+            Arc::clone(&self.last_pos),
+        );
     }
 
     /// Query the root screen geometry, for centring before a monitor is
@@ -250,6 +290,88 @@ impl X11WindowBackend {
     fn intern_atom(&self, name: &str) -> Result<Atom, ReplyError> {
         Ok(self.conn.intern_atom(false, name.as_bytes())?.reply()?.atom)
     }
+}
+
+/// Re-assert the last requested position after a map. The pre-map write
+/// (move_to) is authoritative for re-maps (the WM keeps client geometry
+/// for already-managed windows), but the first manage reads WM_NORMAL_HINTS
+/// that GDK's size-hints path may have rewritten — dropping USPosition — so
+/// the WM would apply its own placement. This post-map re-application makes
+/// the first map land at the requested position deterministically.
+fn reapply_position(conn: &RustConnection, xid: u32, last_pos: &Arc<Mutex<Option<(i32, i32)>>>) {
+    let Some((x, y)) = *last_pos.lock().unwrap() else {
+        return;
+    };
+    let _ = conn.configure_window(
+        xid,
+        &x11rb::protocol::xproto::ConfigureWindowAux::new().x(x).y(y),
+    );
+    let _ = write_position_hint(conn, xid, x, y);
+}
+
+/// Check the window's actual root position and re-assert the requested one
+/// on mismatch. The WM frames the client (reparenting), so the client's
+/// ConfigureNotify only reports the frame-relative position — the root
+/// position is queried via `XTranslateCoordinates`, which walks the tree
+/// and works across reparenting. Best-effort: any error degrades to
+/// silence (the next settle check retries).
+fn settle_position(
+    conn: &RustConnection,
+    root: u32,
+    xid: u32,
+    last_pos: &Arc<Mutex<Option<(i32, i32)>>>,
+) {
+    let Some((x, y)) = *last_pos.lock().unwrap() else {
+        return;
+    };
+    let Ok(cookie) = conn.translate_coordinates(xid, root, 0, 0) else {
+        return;
+    };
+    let Ok(reply) = cookie.reply() else {
+        return;
+    };
+    if reply.dst_x as i32 == x && reply.dst_y as i32 == y {
+        return;
+    }
+    reapply_position(conn, xid, last_pos);
+}
+
+/// The WM's placement at a fresh manage can land *after* the map request
+/// (measured at ~20-30 ms on xfwm4, more under load) and override the
+/// requested position, and a busy WM may drop the first re-assert
+/// configure. Repeat [`settle_position`] for a fixed window past that
+/// latency: every 100 ms the actual root position is verified and
+/// re-asserted on mismatch. The chain is short (2 s, a couple of X
+/// round-trips per check) and each show starts a fresh one, so the last
+/// show's chain outlasts the last placement.
+fn settle_chain(
+    conn: Arc<RustConnection>,
+    root: u32,
+    xid: u32,
+    last_pos: Arc<Mutex<Option<(i32, i32)>>>,
+    remaining: u32,
+) {
+    if remaining == 0 {
+        return;
+    }
+    settle_position(&conn, root, xid, &last_pos);
+    glib::timeout_add_local_once(std::time::Duration::from_millis(100), move || {
+        settle_chain(conn, root, xid, last_pos, remaining - 1)
+    });
+}
+
+/// Kick off the position guard after a position request: first check
+/// shortly after the map (past the WM's usual placement window), then
+/// every 100 ms for the chain's duration.
+fn start_settle(
+    conn: Arc<RustConnection>,
+    root: u32,
+    xid: u32,
+    last_pos: Arc<Mutex<Option<(i32, i32)>>>,
+) {
+    glib::timeout_add_local_once(std::time::Duration::from_millis(50), move || {
+        settle_chain(conn, root, xid, last_pos, 20)
+    });
 }
 
 /// Re-apply hints after the window is mapped.
