@@ -1,6 +1,6 @@
 [package]
 name = "hover-clock"
-version = "2.0.0"
+version = "2.0.1"
 edition = "2024"
 description = "Transient Linux overlay (GTK4): a clock widget surfaced on demand via hot-corner or global shortcut, above fullscreen apps, without taking focus"
 repository = "https://github.com/dominikj111/hover-clock"
