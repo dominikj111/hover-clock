@@ -75,5 +75,5 @@ pending (`./scripts/deploy.sh 2.0.0`).
 - `./scripts/deploy.sh 2.0.0` → tag → release workflow builds the v2.0.0 tarballs; then
   the curl|sh one-liner works for real users. Until the tag exists, `install-release.sh`
   resolves v1.3.1 (latest).
-- The engineering profile (`llm_profiles/engineering/projects/gtk-overlay-desktop.md`)
-  was synced (M7 merged, v2.0.0, multi-desktop note); no repo impact.
+- The engineering workspace's project brief for this exploration was synced (M7 merged,
+  v2.0.0, multi-desktop note); no repo impact.

@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE)
 
 A transient Linux overlay daemon that surfaces widgets on demand — starting with a digital
-clock — via hot-corner or global shortcut, above fullscreen applications, without ever
+clock — via hot area or global shortcut, above fullscreen applications, without ever
 taking focus.
 
 - **Non-focus-stealing** — invisible to task switchers, never takes input focus
@@ -228,7 +228,7 @@ untouched, so the repo is always ready for `cargo run`.
 | --- | --- |
 | Debian GNU/Linux 13 (trixie), Xfce 4.20 (xfce4-session 4.20.2), systemd, X11 (libgtk-4-1 4.18.6+ds-2) | ✅ |
 | MX Linux (trixie-based), Xfce 4.20, systemd boot, X11 | ✅ |
-| Raspberry Pi 4 Model B Rev 1.4 (aarch64), trixie-based Pi OS, PIXEL desktop, systemd | ✅ X11 (xfwm4) · ✅ Wayland (labwc 0.9.8) — native layer-shell overlay + hot corner verified (M7, handoff 07); Super+T/Esc via labwc rc.xml keybinds → `hover-clock` client (compositor-native); caveats in [Wayland status](#wayland-status) |
+| Raspberry Pi 4 Model B Rev 1.4 (aarch64), trixie-based Pi OS, PIXEL desktop, systemd | ✅ X11 (xfwm4) · ✅ Wayland (labwc 0.9.8) — native layer-shell overlay + hot area verified (M7, handoff 07); Super+T/Esc via labwc rc.xml keybinds → `hover-clock` client (compositor-native); caveats in [Wayland status](#wayland-status) |
 
 CI additionally builds and lints on `ubuntu-latest` with the stable toolchain and the
 declared MSRV (1.92). The compatibility record for other distributions, window managers
@@ -238,10 +238,10 @@ declared MSRV (1.92). The compatibility record for other distributions, window m
 
 **Native layer-shell (M7) is live** on compositors with `zwlr_layer_shell_v1`
 (wlroots family and KWin ≥ 5.27): the overlay runs in the OVERLAY layer (stacking above
-fullscreen by construction), placement is anchor + margins, and the hot corner is a set
-of a thin solid-dark 2 px top-edge sensor strip at the monitor's true top edge (an exclusive
-zone beats wlroots' free-area placement — the corner is the top 2 px, over the bar, parity
-with the X11 gesture; it is visible because this compositor composites layer surfaces
+fullscreen by construction), placement is anchor + margins, and the hot area is a set
+of thin solid-dark 2 px top-edge sensor strips at the monitor's true top edge (an exclusive
+zone beats wlroots' free-area placement — the strip sits in the top 2 px, over the bar, in
+parity with the X11 corner gesture; it is visible because this compositor composites layer surfaces
 opaque, see docs/wayland-layer-shell-findings.md §3). Verified on labwc 0.9.8 (handoff 07).
 
 **No multi-desktop (workspace) dependency.** Layer-shell surfaces are not workspace-bound —
