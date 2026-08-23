@@ -6,23 +6,16 @@ story is done only when confirmed implemented (acceptance met + verification per
 
 ## Current state
 
-The daemon runs on X11 (xfwm4-verified): overlay is hidden until triggered, shows on top-edge
-dwell (200 ms debounced) or `Super + T`, dismisses on `Esc`, never takes focus, never
-flashes in the taskbar (GDK skip-taskbar hints, fix on M1/M2), stays invisible to task
-switchers, and auto-hides (debounced) on hot-area leave. **S04 (M3 — Presentation)** in progress:
-clock widget (time/day/date, §11), static single style (rounded corners, translucent black,
-§8.3), `decorated(false)`, corner-leave auto-hide, and the daemon/client CLI split (§7.4) —
-`--start`/`-s` starts the single-instance daemon, no-arg invocations are clients
-sending `show` over the Unix control socket — landed, plus the version row (GitHub release
-check + click-to-update button, §11.2/S09) and the M3 presentation finish: fade in/out
-transitions and placement (centred above the triggered monitor's middle) — **S04 and S09
-delivered** (hand-offs
-`05-m3-presentation.md`, `06-s09-version-update.md`); release flow live (v1.0.0–v1.2.0,
-`just deploy`). **S08 (M7 Wayland) delivered** — layer-shell overlay + hot-corner strips,
-verified native on labwc 0.9.8 (hand-off `07-m7-wayland.md`). **Next: S05 (M4 Calendar
-widget)**. Packaging: daemon autostart fixed for DEs that never raise
-`graphical-session.target` (xfce on MX Linux — unit now wanted by `default.target` too); see
-[handoffs/04-autostart-fix.md](handoffs/04-autostart-fix.md).
+One binary, one branch: X11 (xfwm4-verified) and **native Wayland** (layer-shell, labwc
+0.9.8-verified) run from the same build — **M7 merged to main**, releasing as **v2.0.0**
+(major bump for the new platform support, S11). Overlay hidden until triggered; shows on
+top-edge dwell (200 ms debounced) or `Super + T` (compositor-keybound on Wayland), dismisses
+on `Esc`, never takes focus, invisible to task switchers, auto-hides (debounced) on
+hot-area leave; clock widget (time/day/date), version label with GitHub-release check, fade
+in/out, centred placement. **Next: S05 (M4 — Calendar widget)**. Packaging: daemon
+autostart fixed for DEs that never raise `graphical-session.target` (xfce on MX Linux —
+unit now wanted by `default.target` too); curl|sh release installer live
+(`scripts/install-release.sh`, S11).
 
 ## Story cards
 
@@ -184,6 +177,20 @@ widget)**. Packaging: daemon autostart fixed for DEs that never raise
   (white); main reflects dev's feature set; upgrade path verified end-to-end.
 - **Design refs:** README Releases section, `.github/workflows/release.yml`, S09
 - **Hand-off:** pending
+- **Hand-off:** pending
+
+### S11 — v2.0.0 release & installer ⬜ 2026-08-23
+
+- **Status:** ⬜ prep done — M7 (Wayland) merged to main; README/DEPLOYMENT/AGENTS updated so
+  X11 and Wayland are equally covered; curl|sh release installer live
+  (`scripts/install-release.sh`, smoke-tested against the v1.3.1 release assets: arch
+  detection, runtime-dep check, checksum verification, install). Tag `v2.0.0` (via
+  `./scripts/deploy.sh 2.0.0`) to publish.
+- **Goal:** major release for the merged Wayland support, plus a zero-toolchain install path.
+- **Deliverables:** `install-release.sh` (binary from GitHub Releases, SHA-256 verified,
+  daemon registration: systemd user unit / XDG autostart, runtime-dep check); docs coverage
+  for X11 + Wayland; `v2.0.0` tag.
+- **Design refs:** README Install, `docs/DEPLOYMENT.md` Delivery options
 - **Hand-off:** pending
 
 ## Later (private exploration)

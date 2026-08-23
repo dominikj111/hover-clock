@@ -1,7 +1,7 @@
 # HoverClock — Design Proposal
 
 **Status:** Early-stage architecture · Core focus: overlay behavior and input activation system
-**Scope:** Lightweight Linux overlay daemon (X11 first, Wayland planned)
+**Scope:** Lightweight Linux overlay daemon (X11 + native Wayland, M7 merged — one binary for both sessions)
 **Version:** 0.3 (draft)
 
 ## 1. Purpose

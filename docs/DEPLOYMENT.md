@@ -10,12 +10,15 @@ daemon is a **session** process (X11, never root).
 - Linux with an **X11 session or a layer-shell Wayland compositor** (wlroots family /
   KWin ≥ 5.27). The XWayland fallback keeps running on other Wayland sessions with
   degraded stacking.
-- GTK4 runtime: `libgtk-4-1` (Debian / Raspberry Pi OS), `gtk4` (Fedora/Arch). Builds need
-  the dev headers (`libgtk-4-dev`, `gtk4-devel`, `pkg-config`).
-- **M7 build dep (default-on `wayland` feature):** `libgtk4-layer-shell-dev` on
-  Debian 13 / Pi OS trixie (pkg-config `gtk4-layer-shell-0`). Bookworm and other distros
-  without the package: `cargo build --no-default-features` for the X11-only build.
-- Rust ≥ 1.92 to build from source (declared MSRV, enforced in CI).
+- **Runtime libraries for release binaries** (built with the default `wayland` feature —
+  both are dynamically linked, also on X11): `libgtk-4-1` and `libgtk4-layer-shell-0` on
+  Debian / Raspberry Pi OS trixie; `gtk4` + the layer-shell runtime on Fedora/Arch. The
+  release installer checks these and installs or reports what is missing.
+  - **Debian 12 / Pi OS bookworm:** no layer-shell package exists — release binaries will
+    not run there; use the X11-only source build (`cargo build --no-default-features`).
+- Builds additionally need the dev headers (`libgtk-4-dev` + `libgtk4-layer-shell-dev` on
+  Debian, `gtk4-devel` on Fedora, `pkg-config`) and **Rust ≥ 1.92** (declared MSRV,
+  enforced in CI).
 
 ## Build
 
@@ -27,7 +30,33 @@ cargo build --release       # release (what install.sh uses)
 Validation gate (same as CI): `cargo build --locked`, `cargo clippy --all-targets -- -D
 warnings`, `cargo fmt --check`, `cargo test`.
 
-## Install (production daemon)
+## Install
+
+### From a GitHub release (recommended — no toolchain)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dominikj111/hover-clock/main/scripts/install-release.sh | sh
+```
+
+`install-release.sh` (POSIX sh — runs under plain `sh`) downloads the binary matching the
+architecture (x86_64 / aarch64) from the latest GitHub release, verifies its SHA-256
+checksum, installs it to `~/.local/bin`, and registers the daemon — the same init detection
+and units as the source install below. It checks the GTK4 runtime libraries first and
+installs the missing packages via sudo when run interactively (or with `--yes`). Options:
+
+| Option | Meaning |
+| --- | --- |
+| `--version X.Y.Z` | Install a specific release (default: latest) |
+| `--bin-dir DIR` | Binary directory (default `~/.local/bin`) |
+| `--no-service` | Binary only, no daemon registration |
+| `--yes` | Install missing system packages without prompting |
+| `--help` | Usage |
+
+Upgrading is re-running the installer (always the latest release); the summary prints the
+few `rm`s that uninstall. Non-systemd systems get the XDG autostart entry plus a message
+that crash-restart is systemd-only (and to file an issue if their init needs support).
+
+### From source (build)
 
 ```bash
 ./scripts/install.sh
@@ -71,6 +100,24 @@ reclaimed automatically).
 | `hover-clock show` / `hide` / `toggle` | Client — drive overlay state |
 | `hover-clock --help` / `--version` | Help / version |
 
+## Delivery options (decision record)
+
+The supported paths are intentionally three: **curl | sh release installer** (default),
+**release tarball** (manual), and **source build** (`install.sh` / `just install`, dev and
+exotic setups). Everything heavier is deferred — with 0 confirmed users, a second delivery
+surface is maintenance, not value:
+
+- **cargo install / crates.io** — deferred until a user asks. It would need a crates.io
+  publication and still cannot register the session daemon or ensure the system GTK4
+  libraries (the curl installer does both).
+- **AppImage / Flatpak / Snap** — rejected as too heavy for a < 25 MB session daemon, and
+  a mismatch with the design: the daemon lives in the desktop session (autostart, control
+  socket in the runtime dir, X11/Wayland access) that sandboxes make awkward.
+- **Distro packages (deb/rpm), AUR, Homebrew, Nix** — per-distro maintenance without users;
+  community can add them (an AUR package is a natural first candidate) when demand shows.
+- **Single static binary** — GTK4 + layer-shell cannot be meaningfully statically linked;
+  the dynamic-libs trade (tiny binary, shared GTK4) is documented in the README.
+
 ## Upgrade
 
 ```bash
@@ -89,7 +136,7 @@ main, tags and pushes `vX.Y.Z`; refuses on a dirty tree, a non-main branch, or a
 tag):
 
 ```bash
-./scripts/deploy.sh 1.2.0    # or: just deploy 1.2.0
+./scripts/deploy.sh 2.0.0    # or: just deploy 2.0.0
 ```
 
 Manually, the same steps are:
@@ -113,6 +160,8 @@ the body is deterministic (no doubled footer).
 Install from a release:
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/dominikj111/hover-clock/main/scripts/install-release.sh | sh   # recommended
+# or manually:
 tar xzf hover-clock-vX.Y.Z-x86_64.tar.gz -C ~/.local/bin
 # systemd installs: the unit restarts the daemon on the fresh binary.
 # Every install (systemd or not): hover-clock --restart works too.

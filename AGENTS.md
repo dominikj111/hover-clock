@@ -2,11 +2,11 @@
 
 ## Purpose
 
-HoverClock is a transient Linux overlay daemon (X11 first, Wayland planned): widgets —
-starting with a clock — surface on demand via hot-corner or global shortcut, above fullscreen
-apps, invisible to task switchers, never taking focus. Rust + GTK4-rs, single binary,
-dual-mode (daemon + client), offline-first. Success: proposal §14 milestones confirmed
-implemented in order, one at a time.
+HoverClock is a transient Linux overlay daemon (X11 + native Wayland, M7 merged — one
+binary for both sessions): widgets — starting with a clock — surface on demand via
+hot-corner or global shortcut, above fullscreen apps, invisible to task switchers, never
+taking focus. Rust + GTK4-rs, single binary, dual-mode (daemon + client), offline-first.
+Success: proposal §14 milestones confirmed implemented in order, one at a time.
 
 ## Navigation
 
@@ -18,6 +18,7 @@ implemented in order, one at a time.
 | Change the design | `docs/proposal.md`, amending `docs/index.md` in the same change |
 | Change window / activation backends | `src/backend/` — facade contracts in `src/backend/mod.rs` |
 | Add a widget | proposal §11 (widget contract); composition in `src/main.rs` |
+| Install / release delivery | `scripts/install-release.sh` (curl \| sh, binary from GitHub), `scripts/install.sh` (source), `docs/DEPLOYMENT.md` |
 | Hand-off contract / iteration loop | ICM/MWP guideline (§5 accept → process → handoff) |
 
 ## Rules
@@ -33,6 +34,13 @@ implemented in order, one at a time.
 - Escape always dismisses the overlay if visible — it never has focus, so dismissal cannot
   rely on window focus.
 - Never call `present()` on the overlay (it requests focus); show/hide via `set_visible()`.
+- Release binaries are built with the default `wayland` feature and link system libs at
+  runtime (`libgtk-4-1` + `libgtk4-layer-shell-0` on Debian / Pi OS trixie); bookworm has
+  no layer-shell package — the X11-only source build (`--no-default-features`) is the path
+  there, release binaries will not run.
+- `install-release.sh` embeds fallback copies of the systemd unit and autostart entry —
+  keep them in sync with `packaging/hover-clock.service` and
+  `packaging/hover-clock-autostart.desktop` when those change.
 
 ## Workflow
 
@@ -69,6 +77,8 @@ warns — run `./scripts/upgrade.sh` to bring production to the released version
   Format check to 1.92.0 — rustfmt style drifts between versions).
 - Live smoke on the X session (xfwm4): top-edge dwell shows, `Esc` hides, `Super + T` toggles,
   the active window never becomes the overlay.
+- Live smoke on Wayland (labwc, see `docs/WAYLAND_TESTING.md`): same behavior, with
+  `Super + T`/`Esc` bound in the compositor config (no app-side global shortcuts on Wayland).
 
 ## Context
 

@@ -21,10 +21,39 @@ taking focus.
 
 ## Status
 
-Current milestone **M3 (presentation)** — the clock widget (time/day/date, CSS-styled,
-transient) is in progress. See [`roadmap/ROADMAP.md`](roadmap/ROADMAP.md) for the current
-story and hand-offs, and [`docs/proposal.md`](docs/proposal.md) §14 for the full milestone
-plan.
+**v2.0.0** (current release) — **M7 (Wayland) delivered and merged to main**: the native
+layer-shell backend works on X11 and Wayland from the same binary, hence the major bump.
+Next milestone: **M4 (calendar widget)**. See [`roadmap/ROADMAP.md`](roadmap/ROADMAP.md) for
+the current story and hand-offs, and [`docs/proposal.md`](docs/proposal.md) §14 for the full
+milestone plan.
+
+## Install
+
+**Recommended — one command, no toolchain:** downloads the release binary for your
+architecture (x86_64 / aarch64), verifies its SHA-256 checksum, installs it to
+`~/.local/bin`, and registers the daemon (systemd user service — auto-start at login,
+restart on crash; XDG autostart fallback on non-systemd systems):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dominikj111/hover-clock/main/scripts/install-release.sh | sh
+```
+
+The script first checks the GTK4 runtime libraries (`libgtk-4-1` + `libgtk4-layer-shell-0`
+on Debian / Raspberry Pi OS) and installs — or clearly reports — what is missing; it never
+needs root. Options: `--version X.Y.Z`, `--bin-dir DIR`, `--no-service`, `--yes`; see
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for details.
+
+| Path | When to use |
+| --- | --- |
+| **`curl \| sh`** (above) | End users — binary from GitHub Releases, daemon registered, no Rust toolchain needed |
+| **Release tarball** | Manual install — extract `hover-clock-vX.Y.Z-<arch>.tar.gz` into `~/.local/bin` and run `hover-clock --start` |
+| **Build from source** | Development, or when no release binary fits (other arch, distro without the layer-shell library) — clone, `cargo build`, then `./scripts/install.sh` (or `just install`) |
+| **`cargo install`** | Not offered yet — see note below |
+
+> **Why no `cargo install`?** It would need a crates.io publication, and — unlike the curl
+> installer — it cannot register the session daemon or ensure the system GTK4 libraries.
+> The release-tarball path covers the same ground with less maintenance while the project
+> has 0 confirmed users; when someone asks for it, publishing is a small step.
 
 ## Requirements
 
@@ -75,7 +104,7 @@ The daemon starts with the overlay hidden. Triggers:
 The overlay never appears in the taskbar, never shows in Alt-Tab, and never takes focus.
 
 A small **version label** sits at the bottom of the clock: the running binary's version in
-shadow-grey, turning orange — `v1.0.0 → v1.1.0` — when a newer release exists on GitHub.
+shadow-grey, turning orange — `v2.0.0 → v2.0.1` — when a newer release exists on GitHub.
 The check queries the GitHub Releases API hourly (worker thread, bounded timeouts; offline or
 failed checks leave the label in its current colour, never an error).
 
@@ -96,17 +125,18 @@ extends to TCP/IP for Windows portability (`docs/proposal.md` §7.4).
 | `hover-clock --stop` / `hover-clock stop` | Stop the running daemon — clean exit, control socket released |
 | `hover-clock --restart` / `hover-clock restart` | Restart the running daemon **in place** (same process id — systemd/autostart keep tracking it) |
 
-## Install as a daemon
+## Lifecycle scripts (source installs)
 
 The overlay is designed to run as a **session daemon**: start automatically at login,
 restart on crash, upgrade in place without touching the desktop session. The full lifecycle
-— build, install, upgrade, dev/prod swap, publishing, troubleshooting — is documented in
+— install, upgrade, dev/prod swap, publishing, troubleshooting — is documented in
 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md); the quick reference is below. If [`just`](https://github.com/casey/just)
-is installed, the common operations are one word: `just install`, `just swap-to-dev`,
-`just check`, `just deploy 1.2.0` (run `just` to list all recipes).
+is installed, the common operations are one word: `just install`, `just install-release`,
+`just swap-to-dev`, `just check`, `just deploy 2.0.0` (run `just` to list all recipes).
 
 | Command | Effect |
 | --- | --- |
+| `./scripts/install-release.sh` | Download the latest release binary (no build) — install + register the daemon; the `curl \| sh` path |
 | `./scripts/install.sh` | Build release, install to `~/.local/bin`, register + start the daemon (mechanism per init, below) |
 | `./scripts/upgrade.sh [branch]` | Pull latest, rebuild, restart the running daemon seamlessly (the overlay is transient — a restart between dwells is imperceptible) |
 | `./scripts/swap-to-dev.sh` | Stop the daemon, **stash the installed binary aside** (unlink), then `cargo run` from source |
@@ -126,18 +156,20 @@ stash is discarded with a notice.
 > hover-clock` cannot find it — swap back to production
 > (`./scripts/swap-to-prod.sh`) first.
 
-Getting the *newest* version is `./scripts/upgrade.sh` while in production mode, or
-downloading the latest GitHub release (see [Releases](#releases)).
+Getting the *newest* version is `./scripts/upgrade.sh` while in production mode,
+re-running the curl installer, or downloading the latest GitHub release (see
+[Releases](#releases)).
 
 ## Releases
 
-Versioning is semver (`0.x` for now), with `Cargo.toml` as the single source of truth.
-Publishing is **main-only**: create a tag `vX.Y.Z` on `main` (matching the `Cargo.toml`
-version), push it, and the release pipeline — guarded so tags pointing elsewhere or with a
-version mismatch are rejected — builds release binaries for **x86_64** and **aarch64**
-(Raspberry Pi) and uploads tarballs + SHA-256 checksums to the GitHub release page for that
-tag. Extract a tarball into `~/.local/bin` (or run `./scripts/install.sh` to build from
-source).
+Versioning is semver, with `Cargo.toml` as the single source of truth — **v2.0.0** is
+current (major bump: native Wayland support, M7, merged to main). Publishing is
+**main-only**: create a tag `vX.Y.Z` on `main` (matching the `Cargo.toml` version), push it,
+and the release pipeline — guarded so tags pointing elsewhere or with a version mismatch are
+rejected — builds release binaries for **x86_64** and **aarch64** (Raspberry Pi) and uploads
+tarballs + SHA-256 checksums to the GitHub release page for that tag. Install from a release
+with the curl installer above, by extracting a tarball into `~/.local/bin`, or via
+`./scripts/install.sh` (build from source).
 
 Manual alternatives: `cargo install --path .` (installs to `~/.cargo/bin`) or download the
 release tarball from GitHub Releases and run the binary directly.
@@ -211,6 +243,12 @@ of a thin solid-dark 2 px top-edge sensor strip at the monitor's true top edge (
 zone beats wlroots' free-area placement — the corner is the top 2 px, over the bar, parity
 with the X11 gesture; it is visible because this compositor composites layer surfaces
 opaque, see docs/wayland-layer-shell-findings.md §3). Verified on labwc 0.9.8 (handoff 07).
+
+**No multi-desktop (workspace) dependency.** Layer-shell surfaces are not workspace-bound —
+a workspace switch never touches the overlay (by construction; the X11 xfwm4 re-map
+flicker disappears). Verified on the two extremes: Raspberry Pi OS / labwc, which has no
+multi-desktop support at all, and MX Linux / Xfce, which does — the same build behaves
+identically on both.
 
 Limits:
 - **Global shortcuts are compositor-configured on Wayland** — no app-side global-shortcut
