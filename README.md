@@ -19,6 +19,14 @@ taking focus.
   targets)
 - **X11 + native Wayland** — layer-shell backend behind the same trait facades
 
+<div align="center">
+
+*The clock widget — surfaced on demand via hot area or `Super + T`, above fullscreen apps, without taking focus*
+
+![HoverClock clock widget](docs/screenshot-clock.png)
+
+</div>
+
 ## Status
 
 **v2.0.0** (current release) — **M7 (Wayland) delivered and merged to main**: the native
