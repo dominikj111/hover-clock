@@ -121,5 +121,9 @@ jobs:
           # the same release, and a second invocation regenerated/appended
           # the notes — for a commit-only repo those are just the "Full
           # Changelog" footer, which ended up doubled on every release
-          # page (commit b408829).
-          body-path: .release-notes/release-notes.md
+          # page (commit b408829). `body_path` (snake_case) is the input
+          # softprops/action-gh-release@v2 actually declares — the
+          # kebab-case `body-path` was silently dropped by the runner's
+          # input validation, leaving every release body empty
+          # (v2.0.1 was the first casualty).
+          body_path: .release-notes/release-notes.md

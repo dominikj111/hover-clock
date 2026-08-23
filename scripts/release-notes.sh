@@ -49,8 +49,11 @@ while IFS= read -r subject; do
 done < <(git log --no-merges --format='%s' "$RANGE" | grep -vE '^chore: bump to ')
 
 # Strip the "type (scope): " prefix so bullets read as statements.
+# Handles both styles in the history: "fix (release): ..." and the
+# more common no-space "fix(ci): ..." — the space-only pattern left
+# the prefix in place on every scoped commit.
 strip() {
-    printf '%s\n' "$1" | sed -E 's/^[a-z][a-z-]*( \([^)]*\))?: //'
+    printf '%s\n' "$1" | sed -E 's/^[a-z][a-z-]*( \([^)]*\)|\([^)]*\))?: //'
 }
 
 emit() {
