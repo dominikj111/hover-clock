@@ -5,16 +5,19 @@
 //! layer, §15 decision), never focusable (keyboard mode NONE), placed by
 //! layer-shell anchor + margins instead of X11 root coordinates.
 //!
-//! `WaylandActivationBackend` implements the hot corner with one
-//! transparent 4 px top-strip layer surface per output. Wayland has no
-//! global pointer-position API (proposal §15), so the strip *is* its own
-//! input region: enter/leave crossing events fire when the pointer
-//! reaches the monitor's top edge. The strip is placed at the true top
-//! edge via an exclusive zone (wlroots free-area placement would drop it
-//! below any reserved chrome) and forced to map with a DrawingArea buffer
-//! (an empty transparent window never attaches one). Consequence,
-//! documented in §16: the strip captures clicks in that 4 px band — the
-//! pointer never passes through to the window below it.
+//! `WaylandActivationBackend` implements the hot corner with one thin
+//! 2 px top-strip layer surface per output. Wayland has no global
+//! pointer-position API (proposal §15), so the strip *is* its own input
+//! region: enter/leave crossing events fire when the pointer reaches the
+//! monitor's top edge. The strip is placed at the true top edge via an
+//! exclusive zone (wlroots free-area placement would drop it below any
+//! reserved chrome) and forced to map with a DrawingArea buffer (an
+//! empty transparent window never attaches one). It carries a solid dark
+//! fill because labwc composites layer surfaces opaque — true
+//! transparency is unreachable on this stack (docs/wayland-layer-
+//! shell-findings.md §3). Consequence, documented in §16: the strip
+//! captures clicks in that 2 px band — the pointer never passes through
+//! to the window below it.
 //!
 //! Global shortcuts (`Super + T`, `Esc`) have no portable protocol on
 //! Wayland as of M7 (proposal §16 decision): `ext_global_shortcuts_v1` is
@@ -138,10 +141,13 @@ impl WindowBackend for WaylandWindowBackend {
     }
 }
 
-/// A transparent 4 px top-edge strip on one output: the Wayland hot
-/// corner sensor. The surface's whole area is its input region, so it
-/// receives pointer enter/leave — and swallows clicks in that band.
+/// A 2 px top-edge strip on one output: the Wayland hot corner sensor.
+/// The surface's whole area is its input region, so it receives pointer
+/// enter/leave — and swallows clicks in that band.
 struct HotStrip {
+    /// Keeps the strip window alive for the daemon's lifetime (the only
+    /// reference outside GTK's own bookkeeping; never read — ownership
+    /// alone matters, hence the underscore).
     _window: gtk::Window,
 }
 
@@ -185,9 +191,6 @@ impl WaylandActivationBackend {
             let r = monitor.geometry();
             let strip = gtk::Window::new();
             strip.set_decorated(false);
-            // The strip must stay *visually* empty but still commit a
-            // buffer: wlroots only delivers input to a *mapped* surface,
-            // and an empty GtkWindow with transparent CSS never attaches
             // The strip must commit a *visible* buffer to be mapped: wlroots
             // only delivers input to a mapped surface, and an empty
             // GtkWindow with transparent CSS commits without attaching
