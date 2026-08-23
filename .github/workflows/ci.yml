@@ -40,7 +40,24 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            pkg-config libgtk-4-dev libgtk4-layer-shell-dev
+            pkg-config libgtk-4-dev libwayland-dev wayland-protocols \
+            meson ninja-build
+      # Ubuntu (noble) has no libgtk4-layer-shell-dev package (Debian
+      # trixie+ only) — build the small C library from source instead.
+      # Same source as the Debian package; introspection/vapi/docs/tests
+      # are not needed to satisfy the crate's pkg-config probe
+      # (`gtk4-layer-shell-0 >= 1`).
+      - name: Build libgtk4-layer-shell from source
+        run: |
+          git clone --depth 1 --branch v1.3.0 \
+            https://github.com/wmww/gtk4-layer-shell.git /tmp/gtk4-layer-shell
+          meson setup /tmp/gtk4-layer-shell/build /tmp/gtk4-layer-shell \
+            --prefix=/usr \
+            --libdir=/usr/lib/$(dpkg-architecture -qDEB_HOST_MULTIARCH) \
+            -Dintrospection=false -Dvapi=false -Dsmoke-tests=false
+          ninja -C /tmp/gtk4-layer-shell/build
+          sudo ninja -C /tmp/gtk4-layer-shell/build install
+          sudo ldconfig
       - name: Build
         run: cargo build --locked
       - name: Build without the Wayland feature (X11-only gate)
