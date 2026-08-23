@@ -3,7 +3,10 @@
 # main, tag vX.Y.Z, push the tag — the main-gated release workflow then
 # builds the x86_64 + aarch64 tarballs on GitHub.
 #
-# Usage: ./scripts/deploy.sh <version>     (e.g. 1.2.0 or 2.1.1)
+# Usage: ./scripts/deploy.sh <version> [theme]  (e.g. 1.2.0 or 2.1.1)
+#   theme  optional — becomes the "## vX.Y.Z — <theme>" heading on the
+#          release page (release-notes.sh reads it back from the bump
+#          commit's message; omit for a plain "## vX.Y.Z" header).
 #
 # Guards: main branch only, clean working tree, tag not already on origin.
 
@@ -23,8 +26,9 @@ log() {
 
 VERSION="${1:-}"
 VERSION="${VERSION#v}" # tolerate "v1.2.0"
+THEME="${2:-}"
 if ! [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+){2}$ ]]; then
-    echo "!! usage: ./scripts/deploy.sh <version>  (e.g. 1.2.0 or 2.1.1)" >&2
+    echo "!! usage: ./scripts/deploy.sh <version> [theme]  (e.g. 1.2.0 or 2.1.1)" >&2
     exit 1
 fi
 
@@ -65,7 +69,7 @@ fi
 
 # --- commit, push, tag -----------------------------------------------------
 git add Cargo.toml Cargo.lock
-git commit -m "chore: bump to $VERSION"
+git commit -m "chore: bump to $VERSION${THEME:+ — $THEME}"
 git push origin main
 git tag "v$VERSION"
 git push origin "v$VERSION"
@@ -73,7 +77,7 @@ git push origin "v$VERSION"
 log "deploy v$VERSION (sha $(git rev-parse --short HEAD)) -> release workflow"
 
 echo
-echo "Released v$VERSION:"
+echo "Released v$VERSION${THEME:+ — $THEME}:"
 echo "  - main pushed, tag v$VERSION pushed"
 echo "  - release workflow builds x86_64 + aarch64 tarballs (github.com/dominikj111/hover-clock/releases)"
 echo "  - the installed daemon shows the orange update button once the release is up"

@@ -148,7 +148,9 @@ restart on crash, upgrade in place without touching the desktop session. The ful
 — install, upgrade, dev/prod swap, publishing, troubleshooting — is documented in
 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md); the quick reference is below. If [`just`](https://github.com/casey/just)
 is installed, the common operations are one word: `just install`, `just install-release`,
-`just swap-to-dev`, `just check`, `just deploy 2.0.0` (run `just` to list all recipes).
+`just swap-to-dev`, `just check`, `just deploy 2.0.0` — an optional release theme as
+second arg (`just deploy 2.0.1 "Native Wayland layer-shell backend"`) becomes the
+`## vX.Y.Z — <theme>` heading on the release page (run `just` to list all recipes).
 
 | Command | Effect |
 | --- | --- |

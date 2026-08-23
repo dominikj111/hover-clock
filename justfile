@@ -72,5 +72,7 @@ uninstall:
 
 # Deploy a new release: bumps Cargo.toml/Cargo.lock, commits, pushes main
 # and tags v<version> (main-gated release workflow builds the tarballs).
-deploy version:
-    ./scripts/deploy.sh "{{version}}"
+# An optional theme (second arg) becomes the "## vX.Y.Z — <theme>"
+# heading on the release page.
+deploy version theme="":
+    ./scripts/deploy.sh "{{version}}" "{{theme}}"

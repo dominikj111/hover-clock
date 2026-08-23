@@ -37,6 +37,17 @@ else
     RANGE="$TAG"
 fi
 
+# Theme for the "## vX.Y.Z — <theme>" header, taken from the bump
+# commit's message (deploy.sh's optional theme argument →
+# "chore: bump to X.Y.Z — <theme>"). Empty → plain "## vX.Y.Z".
+# Guarded: only bump commits carry a theme; any other tag keeps the
+# plain header.
+theme=""
+subject="$(git log -1 --format='%s' "$TAG" 2>/dev/null || true)"
+case "$subject" in
+    "chore: bump to "*) theme="$(printf '%s' "$subject" | sed -E 's/^chore: bump to [0-9.]+( — )?//')" ;;
+esac
+
 feat=()
 fix=()
 other=()
@@ -67,7 +78,7 @@ emit() {
     echo
 }
 
-echo "## $TAG"
+echo "## $TAG${theme:+ — $theme}"
 echo
 if [ -n "$PREV" ]; then
     echo "Changes since $PREV:"
