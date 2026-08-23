@@ -1,8 +1,16 @@
 //! Platform backends behind trait contracts (proposal §10).
 //!
-//! The X11 implementation is active for M1–M2; a Wayland layer-shell
-//! backend lands behind the same contracts at M6. Business logic never
-//! touches system APIs directly — it goes through these facades.
+//! X11 (M1–M2) and native Wayland layer-shell (M7) implementations sit
+//! behind the same contracts; business logic never touches system APIs
+//! directly — it goes through these facades.
+//!
+//! Policy note: the strict overlay contract — never takes focus, invisible
+//! to task switchers, transparent/invisible activation regions — is
+//! hover-clock use-case policy, NOT a property of these contracts. Future
+//! operational shells and kiosk apps may relax it (fullscreen or windowed,
+//! focusable, taskbar-visible) and activation may be an explicit
+//! affordance (floating icon, kiosk button) instead of an invisible hot
+//! area (proposal §16).
 
 #[cfg(feature = "wayland")]
 mod wayland;
