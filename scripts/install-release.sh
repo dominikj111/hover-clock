@@ -317,13 +317,7 @@ case "$MECH" in
 esac
 echo "  test     $BIN_DIR/hover-clock           # client: shows the overlay"
 echo "  update   re-run this installer (always installs the latest release)"
-echo "  remove   systemctl --user disable --now hover-clock 2>/dev/null; rm -f $BIN_DIR/hover-clock"
-if [ "$MECH" = systemd ]; then
-    echo "           rm -f $HOME/.config/systemd/user/hover-clock.service"
-fi
-if [ "$MECH" = xdg-autostart ]; then
-    echo "           rm -f $HOME/.config/autostart/hover-clock.desktop"
-fi
+echo "  remove   curl -fsSL https://raw.githubusercontent.com/$REPO/main/scripts/uninstall.sh | sh"
 echo
 echo "On Wayland, bind the global shortcuts in your compositor config (labwc rc.xml,"
 echo "sway, Hyprland) — see the README 'Wayland status' section."

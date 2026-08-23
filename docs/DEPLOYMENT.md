@@ -52,9 +52,12 @@ installs the missing packages via sudo when run interactively (or with `--yes`).
 | `--yes` | Install missing system packages without prompting |
 | `--help` | Usage |
 
-Upgrading is re-running the installer (always the latest release); the summary prints the
-few `rm`s that uninstall. Non-systemd systems get the XDG autostart entry plus a message
-that crash-restart is systemd-only (and to file an issue if their init needs support).
+Upgrading is re-running the installer (always the latest release); uninstalling is one
+command — `curl -fsSL https://raw.githubusercontent.com/dominikj111/hover-clock/main/scripts/uninstall.sh | sh`
+(or `just uninstall` from a checkout): stops any running instance and removes every trace
+(daemon registration, binary, swap stash, audit log — the repo is untouched). Non-systemd
+systems get the XDG autostart entry plus a message that crash-restart is systemd-only (and
+to file an issue if their init needs support).
 
 ### From source (build)
 

@@ -18,7 +18,7 @@ Success: proposal §14 milestones confirmed implemented in order, one at a time.
 | Change the design | `docs/proposal.md`, amending `docs/index.md` in the same change |
 | Change window / activation backends | `src/backend/` — facade contracts in `src/backend/mod.rs` |
 | Add a widget | proposal §11 (widget contract); composition in `src/main.rs` |
-| Install / release delivery | `scripts/install-release.sh` (curl \| sh, binary from GitHub), `scripts/install.sh` (source), `docs/DEPLOYMENT.md` |
+| Install / release delivery | `scripts/install-release.sh` + `scripts/uninstall.sh` (curl \| sh, binary from GitHub), `scripts/install.sh` (source), `docs/DEPLOYMENT.md` |
 | Hand-off contract / iteration loop | ICM/MWP guideline (§5 accept → process → handoff) |
 
 ## Rules

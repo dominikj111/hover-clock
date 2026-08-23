@@ -43,6 +43,14 @@ on Debian / Raspberry Pi OS) and installs — or clearly reports — what is mis
 needs root. Options: `--version X.Y.Z`, `--bin-dir DIR`, `--no-service`, `--yes`; see
 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for details.
 
+Uninstall is equally one command — it stops any running instance and removes **every
+trace** (daemon registration, binary, swap stash, audit log; the repository itself is never
+touched), so the machine is ready for a fresh install or a clean checkout:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dominikj111/hover-clock/main/scripts/uninstall.sh | sh
+```
+
 | Path | When to use |
 | --- | --- |
 | **`curl \| sh`** (above) | End users — binary from GitHub Releases, daemon registered, no Rust toolchain needed |
@@ -141,7 +149,7 @@ is installed, the common operations are one word: `just install`, `just install-
 | `./scripts/upgrade.sh [branch]` | Pull latest, rebuild, restart the running daemon seamlessly (the overlay is transient — a restart between dwells is imperceptible) |
 | `./scripts/swap-to-dev.sh` | Stop the daemon, **stash the installed binary aside** (unlink), then `cargo run` from source |
 | `./scripts/swap-to-prod.sh` | **Relink** the stashed binary back and restart the daemon — instant, offline, no rebuild/re-download |
-| `./scripts/uninstall.sh` | Permanently remove: service/autostart entry, binaries, and swap stash |
+| `./scripts/uninstall.sh` | Remove **every trace** — daemon registration, binaries, swap stash, audit log; also the `curl \| sh` uninstaller |
 
 Production installs are **unlinked, never deleted** when you switch to dev, and relinked on
 return — the swap is instant and offline. The scripts **discover** the production binary

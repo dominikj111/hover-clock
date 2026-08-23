@@ -188,7 +188,9 @@ unit now wanted by `default.target` too); curl|sh release installer live
   `./scripts/deploy.sh 2.0.0`) to publish.
 - **Goal:** major release for the merged Wayland support, plus a zero-toolchain install path.
 - **Deliverables:** `install-release.sh` (binary from GitHub Releases, SHA-256 verified,
-  daemon registration: systemd user unit / XDG autostart, runtime-dep check); docs coverage
+  daemon registration: systemd user unit / XDG autostart, runtime-dep check);
+  `uninstall.sh` rewritten as the standalone curl|sh uninstaller (removes every trace:
+  instances, registration, binaries, socket, state — repo untouched); docs coverage
   for X11 + Wayland; `v2.0.0` tag.
 - **Design refs:** README Install, `docs/DEPLOYMENT.md` Delivery options
 - **Hand-off:** pending
